@@ -23,7 +23,7 @@ phases:
       - ls -lah
       - echo "Building my-lambda..."
       - ls -lah
-      - cd ../lambdas/my-lambda && npm build
+      - cd ../lambdas/my-lambda && npm run build
       - ls -lah
       - echo "Synthesizing CDK..."
       - cd ../../infra
