@@ -32,6 +32,7 @@ export class LambdaStack extends Stack {
         runtime: lambda.Runtime.NODEJS_18_X,
         code: lambda.Code.fromAsset('../lambdas/my-lambda/dist'),
         handler: 'index.handler',
+        timeout: lambda.Duration.minutes(1),
       },
     );
   }

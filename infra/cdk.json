@@ -2,15 +2,15 @@
   "app": "node dist/bin/app.js",
   "context": {
     "dev": {
-      "projectName": "example-geekscalada-pipeline",
+      "projectName": "poc-API-wa",
       "environmentName": "dev"
     },
     "pre": {
-      "projectName": "example-geekscalada-pipeline",
+      "projectName": "poc-API-wa",
       "environmentName": "pre"
     },
     "prod": {
-      "projectName": "example-geekscalada-pipeline",
+      "projectName": "poc-API-wa",
       "environmentName": "prod"
     }
   }

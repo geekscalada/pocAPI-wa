@@ -5,21 +5,21 @@
       "githubRepo": "pipelineAWS_v2",
       "githubOwner": "GEEKSCALADA",
       "githubBranch": "dev",
-      "projectName": "example-geekscalada-pipeline",
+      "projectName": "poc-API-wa",
       "environmentName": "dev"
     },
     "pre": {
       "githubRepo": "pipelineAWS_v2",
       "githubOwner": "GEEKSCALADA",
       "githubBranch": "preproduction",
-      "projectName": "example-geekscalada-pipeline",
+      "projectName": "poc-API-wa",
       "environmentName": "pre"
     },
     "prod": {
       "githubRepo": "pipelineAWS_v2",
       "githubOwner": "GEEKSCALADA",
       "githubBranch": "production",
-      "projectName": "example-geekscalada-pipeline",
+      "projectName": "poc-API-wa",
       "environmentName": "prod"
     }
   }
