@@ -1,11 +1,32 @@
 {
-  "name": "my-lambda",
+  "name": "lambda-example-c-validator",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "",
+  "main": "index.ts",
+  "scripts": {
+    "build": "esbuild index.ts --bundle --minify --sourcemap --platform=node --target=es2020 --outfile=dist/index.js --log-level=warning --define:Reflect.decorate=true",
+    "build2": "tsc"
+  },
+  "author": "",
+  "license": "ISC",
   "dependencies": {
-    "aws-sdk": "^2.1313.0"
+    "@types/node": "^22.10.2",
+    "aws-sdk": "^2.1692.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "cross-env": "^7.0.3",
+    "csv-parse": "^5.6.0",
+    "csv-parser": "^3.1.0",
+    "csv-writer": "^1.6.0",
+    "dotenv": "^16.4.7",
+    "lodash.isequal": "^4.5.0",
+    "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
-    "typescript": "^5.2.2"
+    "@types/aws-lambda": "^8.10.146",
+    "@types/lodash.isequal": "^4.5.8",
+    "esbuild": "^0.24.2",
+    "prettier": "^3.4.2",
+    "ts-node": "^10.9.2"
   }
 }
