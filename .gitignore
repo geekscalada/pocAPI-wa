@@ -1,0 +1,9 @@
+**/cdk.out
+cdk.out/
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+infra/.env
+**/.env
+infra/.env

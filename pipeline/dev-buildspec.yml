@@ -1,0 +1,35 @@
+version: '0.2'
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: '18'
+    commands:
+      # - echo "Updating npm to the latest version..."
+      # - npm install -g npm@latest
+      - pwd
+      - ls -lah
+      - echo "Installing dependencies..."
+      - cd infra && npm install --include=dev
+      - npm install -g typescript
+      - echo "Verifying TypeScript installation..."
+      - tsc --version
+      - pwd
+      - cd ../lambdas/my-lambda && npm install --include=dev
+  build:
+    commands:
+      - echo "Building infrastructure..."
+      - cd ../../infra && npx tsc
+      - ls -lah
+      - echo "Building my-lambda..."
+      - ls -lah
+      - cd ../lambdas/my-lambda && npx tsc
+      - ls -lah
+      - echo "Synthesizing CDK..."
+      - cd ../../infra
+      - npx cdk synth  --context env=dev --verbose
+      - npx cdk deploy --all --context env=dev --require-approval never
+artifacts:
+  files:
+    - '**/*'
+  base-directory: infra/dist

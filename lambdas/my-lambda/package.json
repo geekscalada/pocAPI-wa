@@ -1,0 +1,11 @@
+{
+  "name": "my-lambda",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "aws-sdk": "^2.1313.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2"
+  }
+}
