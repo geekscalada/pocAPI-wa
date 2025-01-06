@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { InternalBucketStack } from '../lib/internal-bucket-stack.js';
 import { LambdaStack } from '../lib/lambda-stack.js';
 import { App, StackProps } from 'aws-cdk-lib';
 
@@ -23,4 +24,10 @@ if (!secretValues) {
 }
 
 // Stacks
-new LambdaStack(app, `LambdaStack-prueba`, secretValues);
+const lambdaStack = new LambdaStack(app, `LambdaStack-prueba`, secretValues);
+const interlBucketStack = new InternalBucketStack(app, `InternalBucketStack-prueba`, secretValues);
+
+/**
+ * Permissions S3 to lambdas
+ */
+interlBucketStack.internalPrivateBucket.grantReadWrite(lambdaStack.lambdaS3poc);
