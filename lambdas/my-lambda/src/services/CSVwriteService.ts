@@ -1,11 +1,11 @@
-import * as fs from "fs";
-import { createObjectCsvWriter } from "csv-writer";
-import { ObjectHeaderItem } from "csv-writer/src/lib/record";
-import { ObjectMap } from "csv-writer/src/lib/lang/object";
+import * as fs from 'fs';
+import { createObjectCsvWriter } from 'csv-writer';
+import { ObjectHeaderItem } from 'csv-writer/src/lib/record.js';
+import { ObjectMap } from 'csv-writer/src/lib/lang/object.js';
 
 export class CSVwriterService<T extends ObjectHeaderItem> {
   private header: T[] = [];
-  private csvFilePath: string = "";
+  private csvFilePath: string = '';
   private encoding: string;
   private fieldDelimiter: string;
   private csvWriter;
@@ -16,12 +16,12 @@ export class CSVwriterService<T extends ObjectHeaderItem> {
     csvFilePath: string,
     encoding?: string,
     fieldDelimiter?: string,
-    append?: boolean
+    append?: boolean,
   ) {
     this.csvFilePath = csvFilePath;
     this.header = header;
-    this.encoding = encoding || "latin1";
-    this.fieldDelimiter = fieldDelimiter || ";";
+    this.encoding = encoding || 'latin1';
+    this.fieldDelimiter = fieldDelimiter || ';';
     this.append = append === undefined ? true : append;
 
     const appendMode = fs.existsSync(this.csvFilePath) && this.append;

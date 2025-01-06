@@ -1,11 +1,14 @@
 {
-  "extends": "../tsconfig.json",
   "compilerOptions": {
-    "rootDir": ".",
-    "outDir": "dist",
-    "allowImportingTsExtensions": true,
-    "noEmit": true
-  },
-  "include": ["bin/**/*.ts", "lib/**/*.ts", "test/**/*.ts"],
-  "exclude": ["node_modules", "cdk.out"]
+    "moduleResolution": "nodenext",
+    "target": "ES2022",
+    "module": "NodeNext",
+    "outDir": "./dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  }
 }
