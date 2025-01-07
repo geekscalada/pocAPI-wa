@@ -33,4 +33,4 @@
 #     aws iam delete-user --user-name $USER
 # done
 
-# echo "Todos los usuarios han sido eliminados."
+# echo "Todos los usuarios han sido eliminados. "
