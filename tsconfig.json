@@ -6,6 +6,15 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
-  }
+    "forceConsistentCasingInFileNames": true,
+    "composite": true, // Needed for references
+    "baseUrl": ".", // For alias
+    "paths": {
+      "@infra/*": ["infra/*"] // Alias for infra
+    },
+    "files": [],
+    "references": [{ "path": "./infra" }, { "path": "./lambdas/my-lambda" }]
+  },
+  "include": ["lambdas/**/*", "infra/**/*"],
+  "exclude": ["node_modules"]
 }

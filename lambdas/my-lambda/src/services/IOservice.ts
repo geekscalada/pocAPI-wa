@@ -2,11 +2,9 @@ import * as AWS from 'aws-sdk';
 import { CSVreadService } from './CSVreadService';
 import { CSVwriterService } from './CSVwriteService';
 import { APIGatewayProxyResult } from 'aws-lambda';
-import { BUCKET_CONFIGS } from '../../../../infra/const/buckets';
-import { writeFileSync } from 'fs';
-import { readFileSync } from 'fs';
+import { BUCKET_CONFIGS } from '@infra/const/buckets';
+import { writeFileSync, readFileSync } from 'fs';
 
-// Configuración de S3
 const s3 = new AWS.S3();
 
 export class IOservice {
@@ -35,20 +33,17 @@ export class IOservice {
       // Store file in /tmp
       writeFileSync(localSourcePath, s3Object.Body as Buffer);
 
-      // Leer datos del CSV
       const csvReader = new CSVreadService<{ column1: string; column2: string }>(localSourcePath, {
         encoding: 'utf-8',
         delimiter: ',',
       });
       const csvData = csvReader.getLoadedCSVData();
 
-      // Procesar datos
       const processedData = csvData.map((record) => ({
         ...record,
         processedColumn: record.column1.toUpperCase(),
       }));
 
-      // Escribir datos procesados en un nuevo archivo CSV
       const csvWriter = new CSVwriterService(
         [
           { id: 'column1', title: 'Column 1' },
