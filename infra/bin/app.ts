@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { InternalBucketStack } from '../lib/internal-bucket-stack';
-import { LambdaStack } from '../lib/lambda-stack';
+import { InternalBucketStack } from '../lib/internal-bucket-stack.js';
+import { LambdaStack } from '../lib/lambda-stack.js';
 import { App, StackProps } from 'aws-cdk-lib';
 
 export interface EnvironmentProps extends StackProps {
