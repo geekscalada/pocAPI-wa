@@ -11,10 +11,10 @@
     "baseUrl": ".", // For alias
     "paths": {
       "@infra/*": ["infra/*"] // Alias for infra
-    },
-    "files": [],
-    "references": [{ "path": "./infra" }, { "path": "./lambdas/my-lambda" }]
+    }
   },
   "include": ["lambdas/**/*", "infra/**/*"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules"],
+  "files": [],
+  "references": [{ "path": "./infra" }, { "path": "./lambdas/my-lambda" }]
 }
