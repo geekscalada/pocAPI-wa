@@ -1,7 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
-import { BUCKET_CONFIGS } from '../const/buckets.ts';
+import { BUCKET_CONFIGS } from '../const/buckets';
 
 export class InternalBucketsStack extends cdk.Stack {
   public readonly internalBucket: s3.Bucket;

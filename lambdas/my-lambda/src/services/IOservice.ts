@@ -1,8 +1,8 @@
 import * as AWS from 'aws-sdk';
-import { CSVreadService } from './CSVreadService.js';
-import { CSVwriterService } from './CSVwriteService.js';
+import { CSVreadService } from './CSVreadService';
+import { CSVwriterService } from './CSVwriteService';
 import { APIGatewayProxyResult } from 'aws-lambda';
-import { BUCKET_CONFIGS } from '../../../../infra/const/buckets.js';
+import { BUCKET_CONFIGS } from '../../../../infra/const/buckets';
 import { writeFileSync } from 'fs';
 import { readFileSync } from 'fs';
 

@@ -1,14 +1,11 @@
 {
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "moduleResolution": "nodenext",
-    "target": "ES2022",
-    "module": "NodeNext",
-    "outDir": "./dist",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
-  }
+    "rootDir": "src",
+    "outDir": "dist",
+    "resolveJsonModule": true,
+    "baseUrl": "./" // Base para resolver imports relativos
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
 }
