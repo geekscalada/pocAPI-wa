@@ -1,6 +1,6 @@
 // Import always first
 import { Context, APIGatewayProxyResult, APIGatewayEvent } from 'aws-lambda';
-import { IOservice } from './IOservice';
+import { IOservice } from './services/IOservice';
 
 export const handler = async (context: Context, event: APIGatewayEvent) => {
   const ioService = new IOservice();
