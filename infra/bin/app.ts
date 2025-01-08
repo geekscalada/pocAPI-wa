@@ -4,7 +4,7 @@ import { InternalBucketStack } from '../lib/internal-bucket-stack.js';
 import { LambdaStack } from '../lib/lambda-stack.js';
 import { App, StackProps } from 'aws-cdk-lib';
 
-export interface EnvironmentProps extends StackProps {
+export interface InfraProps extends StackProps {
   projectName: string;
   environmentName: string;
 }
@@ -17,7 +17,7 @@ if (!environmentContext) {
   throw new Error(`Could not get the context from the command line`);
 }
 
-const secretValues: EnvironmentProps = app.node.tryGetContext(environmentContext);
+const secretValues: InfraProps = app.node.tryGetContext(environmentContext);
 
 if (!secretValues) {
   throw new Error(`Not found values for the environment: ${environmentContext}`);
@@ -25,9 +25,13 @@ if (!secretValues) {
 
 // Stacks
 const lambdaStack = new LambdaStack(app, `LambdaStack-prueba`, secretValues);
-const interlBucketStack = new InternalBucketStack(app, `InternalBucketStack-prueba`, secretValues);
+const internalBucketStack = new InternalBucketStack(
+  app,
+  `InternalBucketStack-prueba`,
+  secretValues,
+);
 
 /**
  * Permissions S3 to lambdas
  */
-interlBucketStack.internalPrivateBucket.grantReadWrite(lambdaStack.lambdaS3poc);
+internalBucketStack.internalPrivateBucket.grantReadWrite(lambdaStack.lambdaS3poc);

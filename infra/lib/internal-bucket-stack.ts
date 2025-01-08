@@ -1,16 +1,17 @@
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
-// import { BUCKET_CONFIGS } from '../const/buckets';
 import { BUCKET_CONFIGS } from '../const/buckets.js';
+import { InfraProps } from '@infra/bin/app.js';
 
 export class InternalBucketStack extends cdk.Stack {
   public readonly internalPrivateBucket: s3.Bucket;
 
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: InfraProps) {
     super(scope, id, props);
 
-    const bucketName = BUCKET_CONFIGS.internalPrivate.name;
+    const { projectName, environmentName } = props;
+    const bucketName = `${projectName}-${environmentName}-${BUCKET_CONFIGS.internalPrivate.name}`;
 
     this.internalPrivateBucket = new s3.Bucket(this, 'InternalPrivateBucket', {
       bucketName,

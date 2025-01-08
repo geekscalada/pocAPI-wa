@@ -1,13 +1,13 @@
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { Stack, Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { EnvironmentProps } from '../bin/app.js';
 import { BUCKET_CONFIGS } from '../const/buckets.js';
+import { InfraProps } from '@infra/bin/app.js';
 
 export class LambdaStack extends Stack {
   public readonly lambdaS3poc: lambda.Function;
 
-  constructor(scope: Construct, id: string, props: EnvironmentProps) {
+  constructor(scope: Construct, id: string, props: InfraProps) {
     super(scope, id, props);
 
     const { projectName, environmentName } = props;
