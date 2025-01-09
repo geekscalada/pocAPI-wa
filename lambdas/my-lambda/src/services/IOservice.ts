@@ -2,7 +2,7 @@ import * as AWS from 'aws-sdk';
 import { CSVreadService } from './CSVreadService.js';
 import { CSVwriterService } from './CSVwriteService.js';
 import { APIGatewayProxyResult } from 'aws-lambda';
-import { BUCKET_CONFIGS } from '@infra/const/buckets.js';
+import { BUCKET_CONFIGS } from '../../../../infra/const/buckets.js';
 import { writeFileSync, readFileSync } from 'fs';
 
 const s3 = new AWS.S3();
