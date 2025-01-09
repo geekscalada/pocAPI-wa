@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import { createObjectCsvWriter } from 'csv-writer';
-import { ObjectHeaderItem } from 'csv-writer/src/lib/record';
-import { ObjectMap } from 'csv-writer/src/lib/lang/object';
+import { ObjectHeaderItem } from 'csv-writer/src/lib/record.js';
+import { ObjectMap } from 'csv-writer/src/lib/lang/object.js';
 
 export class CSVwriterService<T extends ObjectHeaderItem> {
   private header: T[] = [];
