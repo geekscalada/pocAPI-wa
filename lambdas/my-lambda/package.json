@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build-esbuild": "esbuild index.ts --bundle --minify --sourcemap --platform=node --target=es2020 --outfile=dist/index.js --log-level=warning --define:Reflect.decorate=true && cp package.json ./dist/ && npm install --prefix ./dist",
-    "build": "tsc && cp package.json ./dist/ && npm install --prefix ./dist"
+    "build": "tsc && mkdir -p dist && cp package.json ./dist/ && npm install --prefix ./dist"
   },
   "author": "",
   "license": "ISC",
