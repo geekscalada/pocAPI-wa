@@ -5,7 +5,7 @@ phases:
     runtime-versions:
       nodejs: 18
     commands:
-      - set -euo pipefail
+      # - set -euo pipefail
       - echo "== pwd & tree =="
       - pwd
       - ls -la
