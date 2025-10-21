@@ -35,3 +35,8 @@ const internalBucketStack = new InternalBucketStack(
  * Permissions S3 to lambdas
  */
 internalBucketStack.internalPrivateBucket.grantReadWrite(lambdaStack.lambdaS3poc);
+internalBucketStack.internalPrivateBucket.grantReadWrite(lambdaStack.publisherLambda);
+
+
+
+

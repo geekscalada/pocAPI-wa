@@ -6,6 +6,7 @@ import { InfraProps } from '@infra/bin/app.js';
 
 export class LambdaStack extends Stack {
   public readonly lambdaS3poc: lambda.Function;
+  public readonly publisherLambda: lambda.Function;
 
   constructor(scope: Construct, id: string, props: InfraProps) {
     super(scope, id, props);
@@ -45,6 +46,25 @@ export class LambdaStack extends Stack {
           BUCKET_NAME: bucketName,
           INPUT_FOLDER: inputFolder,
           OUTPUT_FOLDER: outputFolder,
+        },
+      },
+    );
+
+    // Publisher Lambda
+    const publisherLambdaBaseName = 'publisher';
+
+    this.publisherLambda = new lambda.Function(
+      this,
+      `${projectName}-${environmentName}-${publisherLambdaBaseName}`,
+      {
+        functionName: `${projectName}-${environmentName}-${publisherLambdaBaseName}`,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        code: lambda.Code.fromAsset('../lambdas/publisher/dist'),
+        handler: 'index.handler',
+        timeout: Duration.minutes(1),
+        environment: {
+          ENVIRONMENT: environmentName,
+          PROJECT_NAME: projectName,
         },
       },
     );
