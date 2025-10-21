@@ -3,19 +3,20 @@ version: '0.2'
 phases:
   install:
     runtime-versions:
-      nodejs: '18'
+      nodejs: 18
     commands:
-      # - echo "Updating npm to the latest version..."
-      # - npm install -g npm@latest
+      - set -euo pipefail
+      - echo "== pwd & tree =="
       - pwd
-      - ls -lah
-      - echo "Installing dependencies..."
-      - cd infra && npm install --include=dev
-      - npm install -g typescript
-      - echo "Verifying TypeScript installation..."
-      - tsc --version
-      - pwd
-      - cd ../..
+      - ls -la
+
+      # --- Infra (CDK) ---
+      - echo "== Install infra (CDK) =="
+      - cd infra
+      - npm ci
+      # Opcional: verifica tsc local (no instales tsc global)
+      - npx tsc --version
+      - cd ..
 
       # --- Lambdas ---
       - echo "== Install all lambdas =="
@@ -31,9 +32,17 @@ phases:
         else
           echo "No lambdas directory found, skipping.";
         fi
+
   build:
     commands:
-      - cd ../..
+      - set -euo pipefail
+
+      # --- Build infra (CDK) ---
+      - echo "== Build infra (CDK) =="
+      - cd infra
+      - npx tsc
+      - cd ..
+
       # --- Build lambdas ---
       - echo "== Build all lambdas =="
       - if [ -d lambdas ]; then
@@ -48,11 +57,10 @@ phases:
         else
           echo "No lambdas directory found, skipping.";
         fi
-      - echo "Synthesizing CDK..."
+
+      # --- CDK synth & deploy ---
+      - echo "== CDK synth =="
       - cd infra
-      - npx cdk synth  --context env=dev --verbose
+      - npx cdk synth --context env=dev --verbose
+      - echo "== CDK deploy =="
       - npx cdk deploy --all --context env=dev --require-approval never
-artifacts:
-  files:
-    - '**/*'
-  base-directory: infra/dist
