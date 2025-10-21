@@ -15,7 +15,7 @@ phases:
       - echo "Verifying TypeScript installation..."
       - tsc --version
       - pwd
-      - cd ..
+      - cd ../..
 
       # --- Lambdas ---
       - echo "== Install all lambdas =="
@@ -33,7 +33,7 @@ phases:
         fi
   build:
     commands:
-      - cd ..
+      - cd ../..
       # --- Build lambdas ---
       - echo "== Build all lambdas =="
       - if [ -d lambdas ]; then
