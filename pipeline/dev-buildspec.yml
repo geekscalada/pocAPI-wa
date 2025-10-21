@@ -22,7 +22,7 @@ phases:
   build:
     commands:
       - echo "Building infrastructure..."
-      - cd ../../infra && npx tsc
+      - cd ../infra && npx tsc
       - ls -lah
       - echo "Building my-lambda..."
       - ls -lah
@@ -31,7 +31,7 @@ phases:
       - for dir in */; do if [ -f "$dir/package.json" ]; then echo "Building lambda in $dir"; cd "$dir" && npm run build && cd ..; fi; done
       - ls -lah
       - echo "Synthesizing CDK..."
-      - cd ../../infra
+      - cd ../infra
       - npx cdk synth  --context env=dev --verbose
       - npx cdk deploy --all --context env=dev --require-approval never
 artifacts:
