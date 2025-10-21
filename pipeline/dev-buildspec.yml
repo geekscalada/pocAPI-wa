@@ -16,6 +16,9 @@ phases:
       - tsc --version
       - pwd
       - cd ../lambdas/my-lambda && npm install --include=dev
+      - echo "Installing dependencies for all lambdas..."
+      - cd ../lambdas
+      - for dir in */; do if [ -f "$dir/package.json" ]; then echo "Installing dependencies in $dir"; cd "$dir" && npm install --include=dev && cd ..; fi; done
   build:
     commands:
       - echo "Building infrastructure..."
@@ -23,7 +26,9 @@ phases:
       - ls -lah
       - echo "Building my-lambda..."
       - ls -lah
-      - cd ../lambdas/my-lambda && npm run build
+      - echo "Building all lambdas..."
+      - cd ../lambdas
+      - for dir in */; do if [ -f "$dir/package.json" ]; then echo "Building lambda in $dir"; cd "$dir" && npm run build && cd ..; fi; done
       - ls -lah
       - echo "Synthesizing CDK..."
       - cd ../../infra
