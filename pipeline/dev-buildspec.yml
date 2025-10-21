@@ -15,21 +15,39 @@ phases:
       - echo "Verifying TypeScript installation..."
       - tsc --version
       - pwd
-      - cd ../lambdas/my-lambda && npm install --include=dev
-      - echo "Installing dependencies for all lambdas..."
       - cd ..
-      - for dir in */; do if [ -f "$dir/package.json" ]; then echo "Installing dependencies in $dir"; cd "$dir" && npm install --include=dev && cd ..; fi; done
+
+      # --- Lambdas ---
+      - echo "== Install all lambdas =="
+      - if [ -d lambdas ]; then
+          cd lambdas;
+          for d in */ ; do
+            if [ -f "$d/package.json" ]; then
+              echo "Installing in lambdas/$d";
+              (cd "$d" && npm ci);
+            fi;
+          done;
+          cd ..;
+        else
+          echo "No lambdas directory found, skipping.";
+        fi
   build:
     commands:
-      - echo "Building infrastructure..."
-      - cd ../infra && npx tsc
-      - ls -lah
-      - echo "Building my-lambda..."
-      - ls -lah
-      - echo "Building all lambdas..."
       - cd ..
-      - for dir in */; do if [ -f "$dir/package.json" ]; then echo "Building lambda in $dir"; cd "$dir" && npm run build && cd ..; fi; done
-      - ls -lah
+      # --- Build lambdas ---
+      - echo "== Build all lambdas =="
+      - if [ -d lambdas ]; then
+          cd lambdas;
+          for d in */ ; do
+            if [ -f "$d/package.json" ]; then
+              echo "Building lambdas/$d";
+              (cd "$d" && npm run build);
+            fi;
+          done;
+          cd ..;
+        else
+          echo "No lambdas directory found, skipping.";
+        fi
       - echo "Synthesizing CDK..."
       - cd ../infra
       - npx cdk synth  --context env=dev --verbose
