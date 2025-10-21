@@ -49,7 +49,7 @@ phases:
           echo "No lambdas directory found, skipping.";
         fi
       - echo "Synthesizing CDK..."
-      - cd ../infra
+      - cd infra
       - npx cdk synth  --context env=dev --verbose
       - npx cdk deploy --all --context env=dev --require-approval never
 artifacts:
