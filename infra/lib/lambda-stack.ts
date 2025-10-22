@@ -39,7 +39,7 @@ export class LambdaStack extends Stack {
       `${projectName}-${environmentName}-${lambdaS3pocBaseName}`,
       {
         functionName: `${projectName}-${environmentName}-${lambdaS3pocBaseName}`,
-        runtime: lambda.Runtime.NODEJS_18_X,
+        runtime: lambda.Runtime.NODEJS_20_X,
         code: lambda.Code.fromAsset('../lambdas/my-lambda/dist'),
         handler: 'index.handler',
         timeout: Duration.minutes(1),
@@ -62,7 +62,7 @@ export class LambdaStack extends Stack {
       `${projectName}-${environmentName}-${publisherLambdaBaseName}`,
       {
         functionName: `${projectName}-${environmentName}-${publisherLambdaBaseName}`,
-        runtime: lambda.Runtime.NODEJS_18_X,
+        runtime: lambda.Runtime.NODEJS_20_X,
         code: lambda.Code.fromAsset('../lambdas/publisher/dist'),
         handler: 'index.handler',
         timeout: Duration.minutes(1),
