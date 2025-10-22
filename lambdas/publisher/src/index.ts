@@ -23,7 +23,8 @@ export const handler = async (context: Context, event: APIGatewayEvent) => {
       MessageAttributes: params.attributes
     });
     const res = await sns.send(cmd);
-    return res.MessageId;
+     console.log("PublishResponse:", res);            // <- Debe mostrar MessageId
+  return { ok: true, messageId: res.MessageId ?? null, meta: res.$metadata }
   }
 
   // Example usage:
