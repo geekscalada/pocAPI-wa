@@ -7,9 +7,9 @@ import { APIGatewayEvent, Context } from "aws-lambda";
 export const handler = async (context: Context, event: APIGatewayEvent) => {
   const sns = new SNSClient({}); // region via env or IAM default
 
-   type SnsAttributes = Record<string, MessageAttributeValue>;
+  type SnsAttributes = Record<string, MessageAttributeValue>;
 
-   async function publishToTestTopic(params: {
+  async function publishToTestTopic(params: {
     topicArn: string;            // e.g. from CDK output or env
     message: string;             // JSON string or plain text
     subject?: string;
@@ -23,8 +23,8 @@ export const handler = async (context: Context, event: APIGatewayEvent) => {
       MessageAttributes: params.attributes
     });
     const res = await sns.send(cmd);
-     console.log("PublishResponse:", res);            // <- Debe mostrar MessageId
-  return { ok: true, messageId: res.MessageId ?? null, meta: res.$metadata }
+    console.log("PublishResponse:", res);            // <- Debe mostrar MessageId
+    return { ok: true, messageId: res.MessageId ?? null, meta: res.$metadata }
   }
 
   // Example usage:
@@ -37,7 +37,7 @@ export const handler = async (context: Context, event: APIGatewayEvent) => {
     }
   });
 
- 
+
 };
 
 
