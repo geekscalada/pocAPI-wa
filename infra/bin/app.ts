@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { SnsTestStack } from '@infra/lib/sns-test-stack.js';
+import { SnsTestStack } from '../lib/sns-test-stack.js';
 import { InternalBucketStack } from '../lib/internal-bucket-stack.js';
 import { LambdaStack } from '../lib/lambda-stack.js';
 import { App, StackProps } from 'aws-cdk-lib';
