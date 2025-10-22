@@ -1,8 +1,9 @@
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import { Stack, Duration } from 'aws-cdk-lib';
+import { Stack, Duration, Fn,  aws_iam as iam } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { BUCKET_CONFIGS } from '../const/buckets.js';
 import { InfraProps } from '@infra/bin/app.js';
+import * as sns from "aws-cdk-lib/aws-sns";
 
 export class LambdaStack extends Stack {
   public readonly lambdaS3poc: lambda.Function;
@@ -53,6 +54,9 @@ export class LambdaStack extends Stack {
     // Publisher Lambda
     const publisherLambdaBaseName = 'publisher';
 
+    const testTopicArn = Fn.importValue("TestTopicArn");
+    const testTopic = sns.Topic.fromTopicArn(this, 'ImportedTestTopic', testTopicArn);
+
     this.publisherLambda = new lambda.Function(
       this,
       `${projectName}-${environmentName}-${publisherLambdaBaseName}`,
@@ -65,8 +69,11 @@ export class LambdaStack extends Stack {
         environment: {
           ENVIRONMENT: environmentName,
           PROJECT_NAME: projectName,
+          TOPIC_TEST_ARN: testTopic.topicArn,  
         },
       },
     );
+
+    testTopic.grantPublish(this.publisherLambda);
   }
 }

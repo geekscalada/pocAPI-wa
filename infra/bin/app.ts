@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { SnsTestStack } from '@infra/lib/sns-test-stack.js';
 import { InternalBucketStack } from '../lib/internal-bucket-stack.js';
 import { LambdaStack } from '../lib/lambda-stack.js';
 import { App, StackProps } from 'aws-cdk-lib';
@@ -30,6 +31,8 @@ const internalBucketStack = new InternalBucketStack(
   `InternalBucketStack-prueba`,
   secretValues,
 );
+
+const snsTestStack = new SnsTestStack(app, "SnsTestStack", secretValues);
 
 /**
  * Permissions S3 to lambdas

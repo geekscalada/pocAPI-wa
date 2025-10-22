@@ -50,7 +50,7 @@ phases:
           for d in */ ; do
             if [ -f "$d/package.json" ]; then
               echo "Building lambdas/$d";
-              (cd "$d" && npm run build);
+              (cd "$d" && npm run build-esbuild);
             fi;
           done;
           cd ..;
