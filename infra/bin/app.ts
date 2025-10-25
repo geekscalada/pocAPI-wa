@@ -3,6 +3,7 @@
 import { SnsTestStack } from '../lib/sns-test-stack.js';
 import { InternalBucketStack } from '../lib/internal-bucket-stack.js';
 import { LambdaStack } from '../lib/lambda-stack.js';
+import { SqsStack } from '../lib/sqs-stack.js';
 import { App, StackProps } from 'aws-cdk-lib';
 
 export interface InfraProps extends StackProps {
@@ -25,6 +26,8 @@ if (!secretValues) {
 }
 
 // Stacks
+const snsTestStack = new SnsTestStack(app, "SnsTestStack", secretValues);
+const sqsStack = new SqsStack(app, "SqsStack", secretValues);
 const lambdaStack = new LambdaStack(app, `LambdaStack-prueba`, secretValues);
 const internalBucketStack = new InternalBucketStack(
   app,
@@ -32,7 +35,8 @@ const internalBucketStack = new InternalBucketStack(
   secretValues,
 );
 
-const snsTestStack = new SnsTestStack(app, "SnsTestStack", secretValues);
+// Stack dependencies - SQS depends on SNS
+sqsStack.addDependency(snsTestStack);
 
 /**
  * Permissions S3 to lambdas
