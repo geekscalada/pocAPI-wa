@@ -35,7 +35,7 @@ const internalBucketStack = new InternalBucketStack(
   secretValues,
 );
 
-// Stack dependencies - SQS depends on SNS
+// Orden del despliegue
 sqsStack.addDependency(snsTestStack);
 
 /**

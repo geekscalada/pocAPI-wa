@@ -25,7 +25,7 @@ export class SqsStack extends Stack {
       retentionPeriod: Duration.days(14), // Máximo tiempo en DLQ
       
       // 🔒 Encriptación 
-      encryption: sqs.QueueEncryption.KMS_MANAGED, // o SQS_MANAGED para menos costo
+      // encryption: sqs.QueueEncryption.KMS_MANAGED, // o SQS_MANAGED para menos costo
       // encryptionMasterKey: key, // Clave KMS personalizada si necesitas
       
       // 📊 Configuraciones adicionales para DLQ
@@ -52,13 +52,14 @@ export class SqsStack extends Stack {
       receiveMessageWaitTime: Duration.seconds(20), // Long polling (0-20s, recomendado >0)
       
       // 🔄 CONFIGURACIÓN DE REINTENTOS
+      // Aquí es donde se enlazan las 2 colas
       deadLetterQueue: {
         queue: this.deadLetterQueue,
         maxReceiveCount: 3, // Intentos antes de ir a DLQ (1-1000)
       },
       
       // 🔒 SEGURIDAD Y ENCRIPTACIÓN
-      encryption: sqs.QueueEncryption.KMS_MANAGED, // Opciones: UNENCRYPTED, SQS_MANAGED, KMS_MANAGED
+      // encryption: sqs.QueueEncryption.KMS_MANAGED, // Opciones: UNENCRYPTED, SQS_MANAGED, KMS_MANAGED
       // encryptionMasterKey: key, // Clave KMS personalizada
       
       // 📦 CONFIGURACIONES DE MENSAJE
