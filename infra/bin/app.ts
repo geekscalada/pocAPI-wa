@@ -4,7 +4,8 @@ import { SnsTestStack } from '../lib/sns-test-stack.js';
 import { InternalBucketStack } from '../lib/internal-bucket-stack.js';
 import { LambdaStack } from '../lib/lambda-stack.js';
 import { SqsStack } from '../lib/sqs-stack.js';
-import { App, StackProps } from 'aws-cdk-lib';
+import { TestingApiStack } from '../lib/testing-api-stack.js';
+import { App, StackProps, Fn } from 'aws-cdk-lib';
 
 export interface InfraProps extends StackProps {
   projectName: string;
@@ -35,8 +36,16 @@ const internalBucketStack = new InternalBucketStack(
   secretValues,
 );
 
+// Testing API Stack
+const testingApiStack = new TestingApiStack(app, "TestingApiStack", secretValues, lambdaStack.publisherLambda);
+
 // Orden del despliegue
 sqsStack.addDependency(snsTestStack);
+testingApiStack.addDependency(snsTestStack);
+
+// Configurar topic ARN en el testing API después de la creación
+const testTopicArn = Fn.importValue("TestTopicArn");
+testingApiStack.configureTopicArn(testTopicArn);
 
 /**
  * Permissions S3 to lambdas

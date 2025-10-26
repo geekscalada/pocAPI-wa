@@ -3,11 +3,15 @@ import { Construct } from 'constructs';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import { InfraProps } from '@infra/bin/app.js';
 
 export class SqsStack extends Stack {
   public readonly mainQueue: sqs.Queue;
   public readonly deadLetterQueue: sqs.Queue;
+  public readonly consumerLambda: lambda.Function;
 
   constructor(scope: Construct, id: string, props: InfraProps) {
     super(scope, id, props);
@@ -124,6 +128,73 @@ export class SqsStack extends Stack {
     testTopic.addSubscription(subscription);
 
     // ========================================
+    // ⚡ LAMBDA CONSUMER
+    // ========================================
+    
+    const consumerLambdaBaseName = 'sqs-consumer';
+    
+    this.consumerLambda = new lambda.Function(
+      this,
+      `${projectName}-${environmentName}-${consumerLambdaBaseName}`,
+      {
+        functionName: `${projectName}-${environmentName}-${consumerLambdaBaseName}`,
+        runtime: lambda.Runtime.NODEJS_20_X,
+        code: lambda.Code.fromAsset('../lambdas/consumer/dist'),
+        handler: 'index.handler',
+        timeout: Duration.minutes(5), // Debe ser < visibilityTimeout de SQS (6min)
+        
+        // 🌍 Variables de entorno para configuración
+        environment: {
+          ENVIRONMENT: environmentName,
+          PROJECT_NAME: projectName,
+          
+          // 🎛️ Configuraciones para simular errores (POC)
+          FORCE_ERROR: 'false', // Cambiar a 'true' para simular errores
+          ERROR_RATE: '0', // 0-100, porcentaje de errores aleatorios
+          PROCESSING_DELAY: '1000', // ms de delay artificial
+          
+          // 📊 Configuraciones de logging
+          LOG_LEVEL: 'INFO'
+        },
+        
+        // 🧠 Configuraciones de memoria y concurrencia
+        memorySize: 256, // MB - ajustar según necesidades
+        reservedConcurrentExecutions: 5, // Limitar concurrencia para evitar overwhelm
+      },
+    );
+
+    // 🔗 Conectar la cola SQS con la Lambda
+    const sqsEventSource = new lambdaEventSources.SqsEventSource(this.mainQueue, {
+      // 📦 Configuración de batching
+      batchSize: 5, // 1-10 mensajes por invocación (ajustar según processing time)
+      maxBatchingWindow: Duration.seconds(10), // Esperar max 10s para llenar batch
+      
+      // 🔄 Configuración de concurrencia  
+      maxConcurrency: 2, // Máximo 2 lambdas procesando simultáneamente
+      
+      // 🎯 Configuración de errores
+      reportBatchItemFailures: true, // Permite partial batch failures
+    });
+
+    // 🔌 Añadir el event source a la lambda
+    this.consumerLambda.addEventSource(sqsEventSource);
+
+    // 🔐 Dar permisos a la lambda para interactuar con SQS
+    this.mainQueue.grantConsumeMessages(this.consumerLambda);
+    this.deadLetterQueue.grantSendMessages(this.consumerLambda);
+
+    // 📊 Dar permisos para enviar métricas a CloudWatch
+    this.consumerLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'cloudwatch:PutMetricData'
+        ],
+        resources: ['*']
+      })
+    );
+
+    // ========================================
     // 📊 OUTPUTS PARA REFERENCIAS EXTERNAS
     // ========================================
     
@@ -149,6 +220,18 @@ export class SqsStack extends Stack {
       value: this.deadLetterQueue.queueArn,
       description: 'ARN de la Dead Letter Queue',
       exportName: `${projectName}-${environmentName}-DLQArn`
+    });
+
+    new CfnOutput(this, 'ConsumerLambdaArn', {
+      value: this.consumerLambda.functionArn,
+      description: 'ARN de la Lambda Consumer SQS',
+      exportName: `${projectName}-${environmentName}-ConsumerLambdaArn`
+    });
+
+    new CfnOutput(this, 'ConsumerLambdaName', {
+      value: this.consumerLambda.functionName,
+      description: 'Nombre de la Lambda Consumer SQS',
+      exportName: `${projectName}-${environmentName}-ConsumerLambdaName`
     });
 
     // ========================================
