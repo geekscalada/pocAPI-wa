@@ -159,7 +159,7 @@ export class SqsStack extends Stack {
         
         // 🧠 Configuraciones de memoria y concurrencia
         memorySize: 256, // MB - ajustar según necesidades
-        reservedConcurrentExecutions: 5, // Limitar concurrencia para evitar overwhelm
+        // reservedConcurrentExecutions: 5, // ❌ Comentado: causa problemas con account limits
       },
     );
 
@@ -170,7 +170,7 @@ export class SqsStack extends Stack {
       maxBatchingWindow: Duration.seconds(10), // Esperar max 10s para llenar batch
       
       // 🔄 Configuración de concurrencia  
-      maxConcurrency: 2, // Máximo 2 lambdas procesando simultáneamente
+      maxConcurrency: 5, // Máximo 5 lambdas procesando simultáneamente (específico para SQS)
       
       // 🎯 Configuración de errores
       reportBatchItemFailures: true, // Permite partial batch failures
