@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { PipelineStack, SecretPipelineStack } from '../lib/pipeline-stack';
+import { PipelineStack, SecretPipelineStack } from '../lib/pipeline-stack.js';
 import { App, StackProps } from 'aws-cdk-lib';
 
 interface EnvironmentProps extends StackProps {

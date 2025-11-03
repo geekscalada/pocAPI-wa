@@ -1,17 +1,82 @@
+import * as cdk from 'aws-cdk-lib';
 import { Stack, CfnOutput, Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import { InfraProps } from '@infra/bin/app.js';
 
 export class TestingApiStack extends Stack {
   public readonly api: apigateway.RestApi;
   public readonly testLambda: lambda.Function;
+  public readonly loginLambda: lambda.Function;
+  public readonly authorizerLambda: lambda.Function;
+  public readonly authorizer: apigateway.TokenAuthorizer;
 
   constructor(scope: Construct, id: string, props: InfraProps, publisherLambda: lambda.Function) {
     super(scope, id, props);
 
     const { projectName, environmentName } = props;
+
+    // ========================================
+    // 🔐 AUTENTICACIÓN: DynamoDB (users) + Secrets Manager (JWT key)
+    // ========================================
+
+    // Tabla de usuarios (POC) - almacenará password en claro (según petición)
+    const usersTable = new dynamodb.Table(this, 'AuthUsersTable', {
+      tableName: `${projectName}-${environmentName}-auth-users`,
+      partitionKey: { name: 'username', type: dynamodb.AttributeType.STRING },
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
+    // Usar el secreto existente "Secret-pipeline" que contiene gitHubToken y jwtSecret
+    const pipelineSecret = secretsmanager.Secret.fromSecretNameV2(
+      this,
+      'PipelineSecret',
+      'Secret-pipeline'
+    );
+
+    // Lambda de Login (public) - consulta DynamoDB y firma JWT
+    this.loginLambda = new lambda.Function(this, 'LoginLambda', {
+      functionName: `${projectName}-${environmentName}-auth-login`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'login.handler',
+      timeout: Duration.seconds(15),
+      code: lambda.Code.fromAsset('../lambdas/auth/dist'),
+      environment: {
+        USERS_TABLE: usersTable.tableName,
+        JWT_SECRET_ARN: pipelineSecret.secretArn,
+        JWT_SECRET_KEY: 'jwtSecret' // Key dentro del secreto JSON
+      }
+    });
+
+    // Lambda Authorizer - valida JWT
+    this.authorizerLambda = new lambda.Function(this, 'AuthorizerLambda', {
+      functionName: `${projectName}-${environmentName}-auth-authorizer`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'authorizer.handler',
+      timeout: Duration.seconds(10),
+      code: lambda.Code.fromAsset('../lambdas/auth/dist'),
+      environment: {
+        JWT_SECRET_ARN: pipelineSecret.secretArn,
+        JWT_SECRET_KEY: 'jwtSecret' // Key dentro del secreto JSON
+      }
+    });
+
+    // Grant permissions
+    usersTable.grantReadData(this.loginLambda);
+    pipelineSecret.grantRead(this.loginLambda);
+    pipelineSecret.grantRead(this.authorizerLambda);
+
+    // API Gateway Authorizer
+    this.authorizer = new apigateway.TokenAuthorizer(this, 'JWTAuthorizer', {
+      handler: this.authorizerLambda,
+      identitySource: 'method.request.header.Authorization',
+      authorizerName: `${projectName}-${environmentName}-jwt-authorizer`,
+      resultsCacheTtl: Duration.minutes(5) // Cache tokens válidos por 5min
+    });
 
     // ========================================
     // 🚀 API GATEWAY PARA TESTING
@@ -153,9 +218,23 @@ export class TestingApiStack extends Stack {
       })
     ));
 
-    // Endpoint principal para enviar eventos
+    // ========================================
+    // 🔐 ENDPOINT DE LOGIN (PÚBLICO - No requiere auth)
+    // ========================================
+    const authResource = this.api.root.addResource('auth');
+    const loginResource = authResource.addResource('login');
+    loginResource.addMethod('POST', new apigateway.LambdaIntegration(this.loginLambda));
+
+    // ========================================
+    // 🔒 ENDPOINTS PROTEGIDOS CON JWT
+    // ========================================
+    
+    // Endpoint principal para enviar eventos (PROTEGIDO)
     const sendResource = this.api.root.addResource('send');
-    sendResource.addMethod('POST', new apigateway.LambdaIntegration(this.testLambda));
+    sendResource.addMethod('POST', new apigateway.LambdaIntegration(this.testLambda), {
+      authorizer: this.authorizer,
+      authorizationType: apigateway.AuthorizationType.CUSTOM
+    });
 
     // Endpoints específicos para diferentes tipos de eventos
     const userCreatedResource = sendResource.addResource('user-created');
@@ -190,7 +269,10 @@ export class TestingApiStack extends Stack {
         handler: 'index.handler',
         environment: { TOPIC_ARN: '' }
       })
-    ));
+    ), {
+      authorizer: this.authorizer,
+      authorizationType: apigateway.AuthorizationType.CUSTOM
+    });
 
     // Endpoint para forzar errores
     const errorTestResource = sendResource.addResource('error-test');
@@ -233,7 +315,10 @@ export class TestingApiStack extends Stack {
         handler: 'index.handler',
         environment: { TOPIC_ARN: '' }
       })
-    ));
+    ), {
+      authorizer: this.authorizer,
+      authorizationType: apigateway.AuthorizationType.CUSTOM
+    });
 
     // ========================================
     // 📊 OUTPUTS
@@ -247,12 +332,25 @@ export class TestingApiStack extends Stack {
 
     new CfnOutput(this, 'TestingEndpoints', {
       value: JSON.stringify({
+        login: `${this.api.url}auth/login`,
         info: `${this.api.url}`,
         sendEvent: `${this.api.url}send`,
         userCreated: `${this.api.url}send/user-created`,
         errorTest: `${this.api.url}send/error-test`
       }),
-      description: 'Endpoints disponibles para testing'
+      description: '🔐 Endpoints - Login público, otros requieren JWT'
+    });
+
+    new CfnOutput(this, 'AuthInfo', {
+      value: JSON.stringify({
+        loginEndpoint: `${this.api.url}auth/login`,
+        usersTable: usersTable.tableName,
+        jwtSecretArn: pipelineSecret.secretArn,
+        jwtSecretKey: 'jwtSecret',
+        usage: 'POST /auth/login with {username, password} → returns {token}',
+        seedExample: `aws dynamodb put-item --table-name ${usersTable.tableName} --item '{"username":{"S":"admin"},"password":{"S":"admin123"}}'`
+      }),
+      description: '🔑 Información de autenticación JWT (usa Secret-pipeline con key: jwtSecret)'
     });
   }
 

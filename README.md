@@ -4,6 +4,54 @@ A repo to easy deploy a pipeline and more infrastructure using AWS CDK and IaC a
 repo you can deploy diffetent pipelines for different environments (for example, dev, integration,
 production) responding to changes in different branches for your gitHub repository.
 
+## 🔐 Autenticación JWT
+
+Este proyecto incluye un sistema de autenticación JWT para proteger la API de testing. Las lambdas de autenticación están en `lambdas/auth/`.
+
+### Configuración del Secreto (Solo Primera Vez)
+
+El secreto JWT se guarda en AWS Secrets Manager en el secreto `Secret-pipeline`, junto con el token de GitHub.
+
+```bash
+# 1. Navegar a la carpeta del pipeline
+cd pipeline
+
+# 2. Copiar .env.example si no existe .env
+cp .env.example .env
+
+# 3. Generar un secreto JWT seguro
+openssl rand -base64 64 | tr -d '\n'
+
+# 4. Editar .env y configurar:
+#    - GITHUB_TOKEN (tu PAT de GitHub)
+#    - JWT_SECRET (el secreto generado arriba)
+nano .env
+
+# 5. Deploy del secreto con CDK (solo primera vez o cuando cambies secretos)
+npm install
+npx cdk deploy SecretPipelineStack
+```
+
+### Validación Local (Antes de Push)
+
+```bash
+# Desde la raíz del proyecto
+./validate-stack.sh
+```
+
+### 🚀 Deploy Automático
+
+El pipeline se encarga del deploy automáticamente cuando haces push a la rama configurada. No necesitas hacer `cdk deploy` manualmente para la infraestructura.
+
+### 🔒 Seguridad
+
+- El secreto JWT se configura en `pipeline/.env` (archivo local, **no se commitea**)
+- Se deploya manualmente con `cdk deploy SecretPipelineStack` (solo una vez)
+- Secrets Manager contiene: `{"gitHubToken": "...", "jwtSecret": "..."}`
+- Las lambdas leen `jwtSecret` desde Secrets Manager en runtime
+
+⚠️ **IMPORTANTE**: El archivo `pipeline/.env` está en `.gitignore`. Nunca lo commitees al repositorio público.
+
 # Getting started
 
 ### We need...

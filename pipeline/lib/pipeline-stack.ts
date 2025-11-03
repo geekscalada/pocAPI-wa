@@ -19,15 +19,21 @@ export class SecretPipelineStack extends cdk.Stack {
     super(scope, id);
 
     const gitHubToken = process.env.GITHUB_TOKEN;
+    const jwtSecret = process.env.JWT_SECRET;
 
     if (!gitHubToken) {
       throw new Error('GitHub token is required, fill your .env file');
+    }
+
+    if (!jwtSecret) {
+      throw new Error('JWT_SECRET is required, fill your .env file with a secure random string (use: openssl rand -base64 64)');
     }
 
     new secretsmanager.Secret(this, `SecretPipeline`, {
       secretName: `Secret-pipeline`,
       secretObjectValue: {
         gitHubToken: cdk.SecretValue.unsafePlainText(gitHubToken),
+        jwtSecret: cdk.SecretValue.unsafePlainText(jwtSecret),
       },
     });
   }
