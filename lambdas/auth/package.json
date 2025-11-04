@@ -5,7 +5,7 @@
   "description": "JWT Authentication Lambda",
   "main": "dist/index.js",
   "scripts": {
-    "build-esbuild": "esbuild src/login.ts src/authorizer.ts --bundle --platform=node --target=node20 --format=esm --outdir=dist --external:@aws-sdk/* --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\"",
+    "build-esbuild": "esbuild src/login.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/login.mjs --external:@aws-sdk/* --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\" && esbuild src/authorizer.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/authorizer.mjs --external:@aws-sdk/* --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\"",
     "build": "tsc",
     "watch": "tsc -w",
     "clean": "rm -rf dist"
