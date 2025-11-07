@@ -1,10 +1,9 @@
 import { APIGatewayProxyHandler } from 'aws-lambda';
 import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
-import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import crypto from 'crypto';
+import { getJwtSecret } from './utils/secretCache.js';
 
 const db = new DynamoDBClient({});
-const sm = new SecretsManagerClient({});
 
 function base64url(input: string) {
 	return Buffer.from(input).toString('base64')
@@ -42,27 +41,10 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 			return { statusCode: 401, body: JSON.stringify({ error: 'invalid credentials' }) };
 		}
 
-    // Obtener secreto JWT desde Secrets Manager
-    const secretRes = await sm.send(
-      new GetSecretValueCommand({ SecretId: process.env.JWT_SECRET_ARN! })
-    );
-    
-    const secretString = secretRes.SecretString || '{}';
-    let parsed: any = {};
-    
-    try {
-      parsed = JSON.parse(secretString);
-    } catch (e) {
-      parsed = {};
-    }
-    
-    // Leer la key específica del secreto (jwtSecret)
-    const secretKey = process.env.JWT_SECRET_KEY || 'jwtSecret';
-    const secret = parsed[secretKey];
-    
-    if (!secret) {
-      throw new Error('JWT secret not found in Secret-pipeline');
-    }		const now = Math.floor(Date.now() / 1000);
+		// Obtener secreto JWT (con caché - solo cold start accede a Secrets Manager)
+		const secret = await getJwtSecret();
+
+		const now = Math.floor(Date.now() / 1000);
 		const payload = { sub: username, iat: now, exp: now + 3600 };
 		const token = signJwt(payload, secret);
 

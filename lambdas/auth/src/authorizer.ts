@@ -1,8 +1,6 @@
 import { APIGatewayTokenAuthorizerEvent, APIGatewayAuthorizerResult } from 'aws-lambda';
-import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import crypto from 'crypto';
-
-const sm = new SecretsManagerClient({});
+import { getJwtSecret } from './utils/secretCache.js';
 
 function base64urlDecode(str: string) {
   str = str.replace(/-/g, '+').replace(/_/g, '/');
@@ -44,28 +42,8 @@ export const handler = async (event: APIGatewayTokenAuthorizerEvent): Promise<AP
     const token = (event.authorizationToken || '').replace(/^Bearer\s+/i, '');
     if (!token) return generatePolicy('anonymous', 'Deny', event.methodArn);
 
-    // Obtener secreto JWT desde Secrets Manager
-    const secretRes = await sm.send(
-      new GetSecretValueCommand({ SecretId: process.env.JWT_SECRET_ARN! })
-    );
-
-    const secretString = secretRes.SecretString || '{}';
-    let parsed: any = {};
-
-    try {
-      parsed = JSON.parse(secretString);
-    } catch (e) {
-      parsed = {};
-    }
-
-    // Leer la key específica del secreto (jwtSecret)
-    const secretKey = process.env.JWT_SECRET_KEY || 'jwtSecret';
-    const secret = parsed[secretKey];
-
-    if (!secret) {
-      console.error('JWT secret not found in Secret-pipeline');
-      return generatePolicy('error', 'Deny', event.methodArn);
-    }
+    // Obtener secreto JWT (con caché - solo cold start accede a Secrets Manager)
+    const secret = await getJwtSecret();
 
     const payload: any = verifyJwt(token, secret);
     if (!payload) return generatePolicy('user', 'Deny', event.methodArn);

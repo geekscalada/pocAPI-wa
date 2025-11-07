@@ -7,6 +7,7 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { InfraProps } from '@infra/bin/app.js';
+import { SECRET_KEYS } from '../const/resources.js';
 
 export class TestingApiStack extends Stack {
   public readonly api: apigateway.RestApi;
@@ -48,7 +49,7 @@ export class TestingApiStack extends Stack {
       environment: {
         USERS_TABLE: usersTable.tableName,
         JWT_SECRET_ARN: pipelineSecret.secretArn,
-        JWT_SECRET_KEY: 'jwtSecret' // Key dentro del secreto JSON
+        JWT_SECRET_KEY: SECRET_KEYS.JWT_SECRET
       }
     });
 
