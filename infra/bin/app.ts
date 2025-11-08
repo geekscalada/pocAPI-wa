@@ -36,16 +36,13 @@ const internalBucketStack = new InternalBucketStack(
   secretValues,
 );
 
-// Testing API Stack
+// Testing API Stack (usa publisherLambda que ya tiene SNS configurado)
 const testingApiStack = new TestingApiStack(app, "TestingApiStack", secretValues, lambdaStack.publisherLambda);
 
 // Orden del despliegue
 sqsStack.addDependency(snsTestStack);
-testingApiStack.addDependency(snsTestStack);
-
-// Configurar topic ARN en el testing API después de la creación
-const testTopicArn = Fn.importValue("TestTopicArn");
-testingApiStack.configureTopicArn(testTopicArn);
+lambdaStack.addDependency(snsTestStack);
+testingApiStack.addDependency(lambdaStack); // Necesita publisherLambda
 
 /**
  * Permissions S3 to lambdas

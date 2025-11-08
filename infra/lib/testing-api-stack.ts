@@ -101,89 +101,11 @@ export class TestingApiStack extends Stack {
     });
 
     // ========================================
-    // 📝 LAMBDA PARA TESTING MANUAL
+    // 📝 USAR PUBLISHER LAMBDA EXISTENTE
     // ========================================
     
-    // Lambda que permite enviar diferentes tipos de eventos fácilmente
-    this.testLambda = new lambda.Function(
-      this,
-      `${projectName}-${environmentName}-test-controller`,
-      {
-        functionName: `${projectName}-${environmentName}-test-controller`,
-        runtime: lambda.Runtime.NODEJS_20_X,
-        code: lambda.Code.fromInline(`
-          const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
-          
-          exports.handler = async (event) => {
-            const sns = new SNSClient({});
-            console.log('Test Controller - Request:', JSON.stringify(event));
-            
-            try {
-              const body = JSON.parse(event.body || '{}');
-              const { eventType = 'TEST_EVENT', id, data, forceError = false } = body;
-              
-              // Construir payload
-              const payload = {
-                event: eventType,
-                id: id || \`test-\${Date.now()}\`,
-                data: data || { test: true, timestamp: new Date().toISOString() },
-                source: 'testing-api',
-                forceError: forceError
-              };
-              
-              // Enviar a SNS
-              const command = new PublishCommand({
-                TopicArn: process.env.TOPIC_ARN,
-                Message: JSON.stringify(payload),
-                Subject: \`Test Event: \${eventType}\`,
-                MessageAttributes: {
-                  eventType: { DataType: 'String', StringValue: eventType },
-                  source: { DataType: 'String', StringValue: 'testing-api' },
-                  testMode: { DataType: 'String', StringValue: 'true' }
-                }
-              });
-              
-              const result = await sns.send(command);
-              console.log('Message sent:', result.MessageId);
-              
-              return {
-                statusCode: 200,
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Access-Control-Allow-Origin': '*'
-                },
-                body: JSON.stringify({
-                  success: true,
-                  messageId: result.MessageId,
-                  payload: payload,
-                  message: \`Event "\${eventType}" sent successfully\`
-                })
-              };
-              
-            } catch (error) {
-              console.error('Error:', error);
-              return {
-                statusCode: 500,
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Access-Control-Allow-Origin': '*'
-                },
-                body: JSON.stringify({
-                  success: false,
-                  error: error.message,
-                  message: 'Failed to send event'
-                })
-              };
-            }
-          };
-        `),
-        handler: 'index.handler',
-        timeout: Duration.seconds(30),
-        environment: {
-          TOPIC_ARN: '', // Se configurará después
-        }
-      }
-    );
+    // Usamos el publisherLambda que ya está configurado con el topic SNS
+    this.testLambda = publisherLambda;
 
     // ========================================
     // 🔗 ENDPOINTS API GATEWAY
@@ -231,92 +153,9 @@ export class TestingApiStack extends Stack {
     // ========================================
     
     // Endpoint principal para enviar eventos (PROTEGIDO)
+    // Usa publisherLambda que ya tiene topic ARN y permisos configurados
     const sendResource = this.api.root.addResource('send');
     sendResource.addMethod('POST', new apigateway.LambdaIntegration(this.testLambda), {
-      authorizer: this.authorizer,
-      authorizationType: apigateway.AuthorizationType.CUSTOM
-    });
-
-    // Endpoints específicos para diferentes tipos de eventos
-    const userCreatedResource = sendResource.addResource('user-created');
-    userCreatedResource.addMethod('POST', new apigateway.LambdaIntegration(
-      new lambda.Function(this, 'UserCreatedLambda', {
-        runtime: lambda.Runtime.NODEJS_20_X,
-        code: lambda.Code.fromInline(`
-          const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
-          exports.handler = async (event) => {
-            const sns = new SNSClient({});
-            const body = JSON.parse(event.body || '{}');
-            
-            const payload = {
-              event: 'USER_CREATED',
-              id: body.id || \`user-\${Date.now()}\`,
-              data: { name: body.name || 'Test User', email: body.email || 'test@example.com' }
-            };
-            
-            const result = await sns.send(new PublishCommand({
-              TopicArn: process.env.TOPIC_ARN,
-              Message: JSON.stringify(payload),
-              MessageAttributes: { eventType: { DataType: 'String', StringValue: 'USER_CREATED' } }
-            }));
-            
-            return {
-              statusCode: 200,
-              headers: { 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({ success: true, messageId: result.MessageId, payload })
-            };
-          };
-        `),
-        handler: 'index.handler',
-        environment: { TOPIC_ARN: '' }
-      })
-    ), {
-      authorizer: this.authorizer,
-      authorizationType: apigateway.AuthorizationType.CUSTOM
-    });
-
-    // Endpoint para forzar errores
-    const errorTestResource = sendResource.addResource('error-test');
-    errorTestResource.addMethod('POST', new apigateway.LambdaIntegration(
-      new lambda.Function(this, 'ErrorTestLambda', {
-        runtime: lambda.Runtime.NODEJS_20_X,
-        code: lambda.Code.fromInline(`
-          const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
-          exports.handler = async (event) => {
-            const sns = new SNSClient({});
-            
-            const payload = {
-              event: 'ERROR_TEST',
-              id: \`error-test-\${Date.now()}\`,
-              data: { shouldFail: true, reason: 'Forced error for testing DLQ' },
-              forceError: true
-            };
-            
-            const result = await sns.send(new PublishCommand({
-              TopicArn: process.env.TOPIC_ARN,
-              Message: JSON.stringify(payload),
-              MessageAttributes: { 
-                eventType: { DataType: 'String', StringValue: 'ERROR_TEST' },
-                forceError: { DataType: 'String', StringValue: 'true' }
-              }
-            }));
-            
-            return {
-              statusCode: 200,
-              headers: { 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({ 
-                success: true, 
-                messageId: result.MessageId, 
-                payload,
-                warning: 'This message will fail processing and go to DLQ after 3 attempts'
-              })
-            };
-          };
-        `),
-        handler: 'index.handler',
-        environment: { TOPIC_ARN: '' }
-      })
-    ), {
       authorizer: this.authorizer,
       authorizationType: apigateway.AuthorizationType.CUSTOM
     });
@@ -335,11 +174,9 @@ export class TestingApiStack extends Stack {
       value: JSON.stringify({
         login: `${this.api.url}auth/login`,
         info: `${this.api.url}`,
-        sendEvent: `${this.api.url}send`,
-        userCreated: `${this.api.url}send/user-created`,
-        errorTest: `${this.api.url}send/error-test`
+        sendEvent: `${this.api.url}send`
       }),
-      description: '🔐 Endpoints - Login público, otros requieren JWT'
+      description: '🔐 Endpoints - Login público, /send requiere JWT'
     });
 
     new CfnOutput(this, 'AuthInfo', {
@@ -353,17 +190,11 @@ export class TestingApiStack extends Stack {
       }),
       description: '🔑 Información de autenticación JWT (usa Secret-pipeline con key: jwtSecret)'
     });
-  }
 
-  // Método para configurar el topic ARN después de la creación
-  public configureTopicArn(topicArn: string) {
-    this.testLambda.addEnvironment('TOPIC_ARN', topicArn);
-    
-    // Configurar ARN en todas las lambdas del API
-    this.node.findAll().forEach(node => {
-      if (node instanceof lambda.Function && node !== this.testLambda) {
-        node.addEnvironment('TOPIC_ARN', topicArn);
-      }
+    new CfnOutput(this, 'UsersTableName', {
+      value: usersTable.tableName,
+      description: 'Nombre de la tabla DynamoDB de usuarios',
+      exportName: `${projectName}-${environmentName}-UsersTable`
     });
   }
 }

@@ -38,17 +38,34 @@ function generatePolicy(principalId: string, effect: 'Allow' | 'Deny', resource:
 }
 
 export const handler = async (event: APIGatewayTokenAuthorizerEvent): Promise<APIGatewayAuthorizerResult> => {
+  console.log('Authorizer invoked for:', event.methodArn);
+  
   try {
     const token = (event.authorizationToken || '').replace(/^Bearer\s+/i, '');
-    if (!token) return generatePolicy('anonymous', 'Deny', event.methodArn);
+    if (!token) {
+      console.log('No token provided');
+      return generatePolicy('anonymous', 'Deny', event.methodArn);
+    }
 
     // Obtener secreto JWT (con caché - solo cold start accede a Secrets Manager)
     const secret = await getJwtSecret();
 
     const payload: any = verifyJwt(token, secret);
-    if (!payload) return generatePolicy('user', 'Deny', event.methodArn);
+    if (!payload) {
+      console.log('Invalid token');
+      return generatePolicy('user', 'Deny', event.methodArn);
+    }
 
-    return generatePolicy(payload.sub || 'user', 'Allow', event.methodArn, { username: payload.sub });
+    console.log('Token validated for user:', payload.sub);
+    
+    // 🔧 FIX: Usar wildcard en el resource para permitir todos los métodos del API
+    // event.methodArn ejemplo: arn:aws:execute-api:region:account:api-id/stage/METHOD/resource
+    // Convertir a: arn:aws:execute-api:region:account:api-id/stage/*/*
+    const arnParts = event.methodArn.split('/');
+    const apiGatewayArnPrefix = arnParts.slice(0, 2).join('/'); // arn:aws:execute-api:region:account:api-id/stage
+    const resourceWildcard = `${apiGatewayArnPrefix}/*/*`;
+    
+    return generatePolicy(payload.sub || 'user', 'Allow', resourceWildcard, { username: payload.sub });
   } catch (err) {
     console.error('Authorizer error', err);
     return generatePolicy('error', 'Deny', event.methodArn);

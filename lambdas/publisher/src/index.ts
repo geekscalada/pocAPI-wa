@@ -1,43 +1,85 @@
-// Minimal, typed, SDK v3
+// Publisher Lambda - Envía eventos a SNS desde API Gateway
 import { SNSClient, PublishCommand, MessageAttributeValue } from "@aws-sdk/client-sns";
-import { APIGatewayEvent, Context } from "aws-lambda";
+import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from "aws-lambda";
 
+const sns = new SNSClient({});
 
+type SnsAttributes = Record<string, MessageAttributeValue>;
 
-export const handler = async (context: Context, event: APIGatewayEvent) => {
-  const sns = new SNSClient({}); // region via env or IAM default
-
-  type SnsAttributes = Record<string, MessageAttributeValue>;
-
-  async function publishToTestTopic(params: {
-    topicArn: string;            // e.g. from CDK output or env
-    message: string;             // JSON string or plain text
-    subject?: string;
-    attributes?: SnsAttributes;  // optional message attributes
-  }) {
-    // Keep payload small; SNS limit ~256 KB
-    const cmd = new PublishCommand({
-      TopicArn: params.topicArn,
-      Message: params.message,
-      Subject: params.subject,
-      MessageAttributes: params.attributes
-    });
-    const res = await sns.send(cmd);
-    console.log("PublishResponse:", res);            // <- Debe mostrar MessageId
-    return { ok: true, messageId: res.MessageId ?? null, meta: res.$metadata }
-  }
-
-  // Example usage:
-  await publishToTestTopic({
-    topicArn: process.env.TOPIC_TEST_ARN!,
-    message: JSON.stringify({ event: "USER_CREATED", id: "123" }),
-    subject: "domain-event",
-    attributes: {
-      "eventType": { DataType: "String", StringValue: "USER_CREATED" }
+export const handler = async (event: APIGatewayProxyEvent, context: Context): Promise<APIGatewayProxyResult> => {
+  console.log('Publisher - Request:', JSON.stringify(event));
+  
+  try {
+    // Parse body
+    const body = JSON.parse(event.body || '{}');
+    const { 
+      eventType = 'TEST_EVENT', 
+      id, 
+      data, 
+      forceError = false,
+      subject 
+    } = body;
+    
+    // Construir payload
+    const payload = {
+      event: eventType,
+      id: id || `test-${Date.now()}`,
+      data: data || { test: true, timestamp: new Date().toISOString() },
+      source: 'testing-api',
+      forceError: forceError
+    };
+    
+    // Preparar atributos del mensaje
+    const attributes: SnsAttributes = {
+      eventType: { DataType: 'String', StringValue: eventType },
+      source: { DataType: 'String', StringValue: 'testing-api' },
+      testMode: { DataType: 'String', StringValue: 'true' }
+    };
+    
+    if (forceError) {
+      attributes.forceError = { DataType: 'String', StringValue: 'true' };
     }
-  });
-
-
+    
+    // Publicar a SNS
+    const command = new PublishCommand({
+      TopicArn: process.env.TOPIC_TEST_ARN!,
+      Message: JSON.stringify(payload),
+      Subject: subject || `Event: ${eventType}`,
+      MessageAttributes: attributes
+    });
+    
+    const result = await sns.send(command);
+    console.log('Message sent to SNS:', result.MessageId);
+    
+    return {
+      statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
+      body: JSON.stringify({
+        success: true,
+        messageId: result.MessageId,
+        payload: payload,
+        message: `Event "${eventType}" sent successfully to SNS`
+      })
+    };
+    
+  } catch (error) {
+    console.error('Publisher error:', error);
+    return {
+      statusCode: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
+      body: JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        message: 'Failed to send event to SNS'
+      })
+    };
+  }
 };
 
 
