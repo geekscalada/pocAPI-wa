@@ -62,7 +62,7 @@ export class TestingApiStack extends Stack {
       code: lambda.Code.fromAsset('../lambdas/auth/dist'),
       environment: {
         JWT_SECRET_ARN: pipelineSecret.secretArn,
-        JWT_SECRET_KEY: 'jwtSecret' // Key dentro del secreto JSON
+        JWT_SECRET_KEY: SECRET_KEYS.JWT_SECRET // Key dentro del secreto JSON
       }
     });
 

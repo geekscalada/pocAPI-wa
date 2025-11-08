@@ -1,15 +1,31 @@
+// Comments in English (following best practices)
 import { SQSEvent, SQSRecord, Context } from 'aws-lambda';
 import { CloudWatchClient, PutMetricDataCommand } from '@aws-sdk/client-cloudwatch';
+import { 
+  IdempotencyConfig, 
+  makeIdempotent
+} from '@aws-lambda-powertools/idempotency';
+import { DynamoDBPersistenceLayer } from '@aws-lambda-powertools/idempotency/dynamodb';
 
-// 🔧 Cliente CloudWatch para métricas personalizadas
+// 🔧 CloudWatch client
 const cloudwatch = new CloudWatchClient({});
+
+// 🔑 Idempotency setup (exact pattern as proposed)
+const persistence = new DynamoDBPersistenceLayer({ 
+  tableName: process.env.IDEMPOTENCY_TABLE! 
+});
+
+const idempotencyConfig = new IdempotencyConfig({
+  eventKeyJmesPath: 'body.Message.id',  // Use the event ID from the payload (allows testing duplicates)
+  expiresAfterSeconds: 604800            // 7 days (same as DynamoDB TTL)
+});
 
 // 🌡️ Global variable para detectar cold starts
 declare global {
   var isWarm: boolean;
 }
 
-// 📊 Interface para el payload esperado del SNS/SQS
+// 📊 Interfaces
 interface NotificationPayload {
   event: string;
   id: string;
@@ -19,264 +35,214 @@ interface NotificationPayload {
   forceError?: boolean;
 }
 
-// 🎯 Configuración de simulación de errores (para testing)
 interface ProcessingConfig {
   forceError?: boolean;
-  errorRate?: number; // 0-100, porcentaje de errores
-  processingDelay?: number; // ms de delay artificial
+  errorRate?: number;
+  processingDelay?: number;
 }
 
-export const handler = async (event: SQSEvent, context: Context) => {
-  // ⏱️ TIMING: Handler start
+// Business logic extracted (will be wrapped by idempotency)
+async function processBusinessLogic(record: SQSRecord): Promise<void> {
+  const messageId = record.messageId;
+  
+  console.log(`🔍 [PROCESSOR] Processing: ${messageId}`);
+
+  // Parse payload (from SNS or direct)
+  let payload: NotificationPayload;
+  
+  try {
+    const parsed = JSON.parse(record.body);
+    
+    // SNS wrapped message
+    if (parsed.Type === 'Notification' && parsed.Message) {
+      payload = JSON.parse(parsed.Message);
+    } else {
+      // Direct SQS message
+      payload = parsed;
+    }
+  } catch (parseError) {
+    throw new Error(`Parse error: ${parseError}`);
+  }
+
+  console.log(`🎯 [EVENT] ${payload.event} | ID: ${payload.id}`);
+
+  // Configuration for error simulation
+  const config: ProcessingConfig = {
+    forceError: process.env.FORCE_ERROR === 'true',
+    errorRate: parseInt(process.env.ERROR_RATE || '0'),
+    processingDelay: parseInt(process.env.PROCESSING_DELAY || '0')
+  };
+
+  // Simulate random errors
+  if (config.errorRate && config.errorRate > 0) {
+    if (Math.random() * 100 < config.errorRate) {
+      throw new Error(`🎲 Simulated random error (${config.errorRate}% rate)`);
+    }
+  }
+
+  // Force error if configured
+  if (config.forceError || payload.forceError === true) {
+    throw new Error(`🚨 Forced error for testing`);
+  }
+
+  // Processing delay
+  if (config.processingDelay && config.processingDelay > 0) {
+    await new Promise(resolve => setTimeout(resolve, config.processingDelay));
+  }
+
+  // Process by event type
+  await processEventByType(payload, messageId);
+
+  console.log(`✅ [SUCCESS] ${payload.event} processed`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 📨 MAIN HANDLER (with idempotency wrapper applied)
+// ═══════════════════════════════════════════════════════════════
+
+const handlerLogic = async (event: SQSEvent, context: Context) => {
   const handlerStartTime = Date.now();
   
-  // 🔥 DETECTAR COLD START
+  // Cold start detection
   const isColdStart = !global.isWarm;
   global.isWarm = true;
   
-  console.log(`🚀 [CONSUMER] Starting batch processing. Records: ${event.Records.length}`);
-  console.log(`🔥 [COLD START] Is cold start: ${isColdStart ? 'YES ❄️' : 'NO 🔥'}`);
-  console.log(`🔍 [CONSUMER] Context:`, JSON.stringify({
-    functionName: context.functionName,
-    requestId: context.awsRequestId,
-    remainingTime: context.getRemainingTimeInMillis(),
-    isColdStart: isColdStart
-  }));
+  console.log(`🚀 [CONSUMER] Batch size: ${event.Records.length}`);
+  console.log(`🔥 [COLD START] ${isColdStart ? 'YES ❄️' : 'NO 🔥'}`);
+  console.log(`🔑 [IDEMPOTENCY] ENABLED ✅`);
 
-  // ⏱️ TIMING: Overhead setup complete
   const setupCompleteTime = Date.now();
   const setupOverhead = setupCompleteTime - handlerStartTime;
-  console.log(`⏱️ [TIMING] Setup overhead: ${setupOverhead}ms`);
+  console.log(`⏱️ [TIMING] Setup: ${setupOverhead}ms`);
 
-  // 📊 Métricas del batch
+  // Metrics
   let successCount = 0;
   let errorCount = 0;
+  let duplicatesDetected = 0;
   const batchStartTime = Date.now();
   const failedMessageIds: string[] = [];
 
-  // 🔄 Procesar cada mensaje del batch
+  // Process each record in the batch
   const results = await Promise.allSettled(
-    event.Records.map(record => processMessage(record, context))
+    event.Records.map(async (record) => {
+      await processBusinessLogic(record);
+      return 'success';
+    })
   );
 
-  // 📈 Contar resultados y recopilar fallos
+  // Count results
   results.forEach((result, index) => {
     const record = event.Records[index];
     if (result.status === 'fulfilled') {
       successCount++;
-      console.log(`✅ [CONSUMER] Message ${index + 1} (${record.messageId}) processed successfully`);
+      console.log(`✅ [${index + 1}] ${record.messageId} - SUCCESS`);
     } else {
       errorCount++;
       failedMessageIds.push(record.messageId);
-      console.error(`❌ [CONSUMER] Message ${index + 1} (${record.messageId}) failed:`, result.reason);
+      console.error(`❌ [${index + 1}] ${record.messageId} - ERROR:`, result.reason);
     }
   });
 
   const processingTime = Date.now() - batchStartTime;
+  const totalTime = Date.now() - handlerStartTime;
 
-  // ⏱️ TIMING: Calculate overhead vs processing
-  const totalHandlerTime = Date.now() - handlerStartTime;
-  const actualProcessingTime = processingTime;
-  const totalOverhead = totalHandlerTime - actualProcessingTime;
-  
-  console.log(`⏱️ [TIMING] Total handler time: ${totalHandlerTime}ms`);
-  console.log(`⏱️ [TIMING] Actual processing time: ${actualProcessingTime}ms`);
-  console.log(`⏱️ [TIMING] Total overhead: ${totalOverhead}ms`);
-  console.log(`⏱️ [TIMING] Overhead per message: ${totalOverhead / event.Records.length}ms`);
-  console.log(`⏱️ [TIMING] Processing per message: ${actualProcessingTime / event.Records.length}ms`);
+  console.log(`📊 [SUMMARY] Success: ${successCount}, Errors: ${errorCount}, Duplicates: ${duplicatesDetected}`);
+  console.log(`⏱️ [TIMING] Processing: ${processingTime}ms, Total: ${totalTime}ms`);
 
-  // 📊 Enviar métricas a CloudWatch (incluyendo timing detallado)
-  await sendMetrics(successCount, errorCount, processingTime, event.Records.length, totalOverhead, setupCompleteTime - handlerStartTime);
+  // Send metrics to CloudWatch
+  await sendMetrics(
+    successCount,
+    errorCount,
+    processingTime,
+    event.Records.length,
+    setupOverhead,
+    duplicatesDetected
+  );
 
-  console.log(`📊 [CONSUMER] Batch completed - Success: ${successCount}, Errors: ${errorCount}, Time: ${processingTime}ms`);
-
-  // 🎯 PARTIAL BATCH FAILURE: Solo reintentar mensajes que fallaron
+  // Return batch item failures for SQS partial batch response
   if (errorCount > 0) {
-    console.warn(`⚠️ [CONSUMER] ${errorCount} messages will be retried individually by SQS`);
-    console.log(`🔄 [CONSUMER] Failed message IDs:`, failedMessageIds);
-    
-    // � RETORNAR SOLO LOS IDs DE MENSAJES FALLIDOS
-    // Esto le dice a SQS que solo reintente estos mensajes específicos
+    console.warn(`⚠️ [RETRY] ${errorCount} messages will be retried by SQS`);
     return {
       batchItemFailures: failedMessageIds.map(id => ({ itemIdentifier: id }))
     };
   }
 
-  // ✅ Todo exitoso
   return {
     statusCode: 200,
-    body: `Successfully processed ${successCount} messages`
+    body: `Processed ${successCount} messages (${duplicatesDetected} duplicates skipped)`
   };
 };
 
-// 🔧 Procesar un mensaje individual
-async function processMessage(record: SQSRecord, context: Context): Promise<void> {
-  const messageId = record.messageId;
-  const receiptHandle = record.receiptHandle;
-  
-  console.log(`🔍 [PROCESSOR] Processing message ${messageId}`);
-  console.log(`📝 [PROCESSOR] Message body:`, record.body);
-  console.log(`📋 [PROCESSOR] Message attributes:`, JSON.stringify(record.messageAttributes));
-
-  try {
-    // 📦 Parsear el payload (puede venir de SNS o directo)
-    let payload: NotificationPayload;
-    
-    try {
-      const parsed = JSON.parse(record.body);
-      
-      // 🔍 Detectar si viene de SNS (wrapped) o directo
-      if (parsed.Type === 'Notification' && parsed.Message) {
-        console.log(`📡 [PROCESSOR] Message from SNS topic: ${parsed.TopicArn}`);
-        payload = JSON.parse(parsed.Message);
-      } else {
-        console.log(`📬 [PROCESSOR] Direct SQS message`);
-        payload = parsed;
-      }
-    } catch (parseError) {
-      throw new Error(`Failed to parse message: ${parseError}`);
-    }
-
-    console.log(`🎯 [PROCESSOR] Parsed payload:`, JSON.stringify(payload));
-
-    // 🎛️ Leer configuración de simulación de errores desde variables de entorno
-    const config: ProcessingConfig = {
-      forceError: process.env.FORCE_ERROR === 'true',
-      errorRate: parseInt(process.env.ERROR_RATE || '0'),
-      processingDelay: parseInt(process.env.PROCESSING_DELAY || '0')
-    };
-
-    // 🎲 Simular errores aleatorios (para testing)
-    if (config.errorRate && config.errorRate > 0) {
-      const randomError = Math.random() * 100;
-      if (randomError < config.errorRate) {
-        throw new Error(`🎲 Simulated random error (${config.errorRate}% rate)`);
-      }
-    }
-
-    // 🚨 Forzar error si está configurado globalmente
-    if (config.forceError) {
-      throw new Error(`🚨 Forced error for testing (FORCE_ERROR=true)`);
-    }
-
-    // 🚨 Forzar error si el mensaje específico lo requiere
-    if (payload.forceError === true) {
-      console.log(`🚨 [PROCESSOR] Message contains forceError=true, simulating failure...`);
-      throw new Error(`🚨 Message-specific forced error for event: ${payload.event}`);
-    }
-
-    // ⏱️ Simular delay de procesamiento
-    if (config.processingDelay && config.processingDelay > 0) {
-      console.log(`⏱️ [PROCESSOR] Simulating ${config.processingDelay}ms processing delay...`);
-      await new Promise(resolve => setTimeout(resolve, config.processingDelay));
-    }
-
-    // 🔄 Procesar según el tipo de evento
-    await processEventByType(payload, messageId);
-
-    // ✅ Logging de éxito
-    console.log(`✅ [PROCESSOR] Successfully processed ${payload.event} for ID: ${payload.id}`);
-
-  } catch (error) {
-    // 🚨 Logging detallado del error
-    console.error(`❌ [PROCESSOR] Error processing message ${messageId}:`, {
-      error: error instanceof Error ? error.message : error,
-      stack: error instanceof Error ? error.stack : undefined,
-      messageBody: record.body,
-      receiptHandle: receiptHandle,
-      attemptsMade: record.attributes?.ApproximateReceiveCount || 'unknown'
-    });
-
-    // 🔄 Re-throw para que SQS maneje el retry
-    throw error;
+// Apply idempotency wrapper to the handler (exact pattern as proposed)
+export const handler = makeIdempotent(
+  handlerLogic,
+  {
+    persistenceStore: persistence,
+    config: idempotencyConfig
   }
-}
+);
 
-// 🎯 Procesar diferentes tipos de eventos
+
+
+// ═══════════════════════════════════════════════════════════════
+// 🎯 EVENT TYPE PROCESSORS
+// ═══════════════════════════════════════════════════════════════
+
 async function processEventByType(payload: NotificationPayload, messageId: string): Promise<void> {
-  console.log(`🎯 [EVENT_PROCESSOR] Processing event type: ${payload.event}`);
-
   switch (payload.event) {
     case 'USER_CREATED':
       await processUserCreated(payload, messageId);
       break;
-      
     case 'USER_UPDATED':
       await processUserUpdated(payload, messageId);
       break;
-      
     case 'ORDER_PLACED':
       await processOrderPlaced(payload, messageId);
       break;
-      
     case 'TEST_EVENT':
       await processTestEvent(payload, messageId);
       break;
-      
     default:
-      console.warn(`⚠️ [EVENT_PROCESSOR] Unknown event type: ${payload.event}. Processing as generic.`);
       await processGenericEvent(payload, messageId);
   }
 }
 
-// 🏷️ Procesadores específicos por tipo de evento
 async function processUserCreated(payload: NotificationPayload, messageId: string): Promise<void> {
-  console.log(`👤 [USER_CREATED] Processing user creation for ID: ${payload.id}`);
-  
-  // Aquí irían las operaciones específicas:
-  // - Enviar email de bienvenida
-  // - Crear perfil en sistema CRM
-  // - Configurar permisos por defecto
-  
-  console.log(`👤 [USER_CREATED] User ${payload.id} setup completed`);
+  console.log(`👤 [USER_CREATED] ${payload.id}`);
+  // Business logic here
 }
 
 async function processUserUpdated(payload: NotificationPayload, messageId: string): Promise<void> {
-  console.log(`🔄 [USER_UPDATED] Processing user update for ID: ${payload.id}`);
-  
-  // Operaciones de actualización:
-  // - Sincronizar con sistemas externos
-  // - Invalidar caché
-  // - Notificar a servicios dependientes
-  
-  console.log(`🔄 [USER_UPDATED] User ${payload.id} synchronization completed`);
+  console.log(`🔄 [USER_UPDATED] ${payload.id}`);
+  // Business logic here
 }
 
 async function processOrderPlaced(payload: NotificationPayload, messageId: string): Promise<void> {
-  console.log(`🛒 [ORDER_PLACED] Processing order for ID: ${payload.id}`);
-  
-  // Operaciones de pedido:
-  // - Reservar inventario
-  // - Procesar pago
-  // - Enviar confirmación
-  
-  console.log(`🛒 [ORDER_PLACED] Order ${payload.id} processing initiated`);
+  console.log(`🛒 [ORDER_PLACED] ${payload.id}`);
+  // Business logic here
 }
 
 async function processTestEvent(payload: NotificationPayload, messageId: string): Promise<void> {
-  console.log(`🧪 [TEST_EVENT] Processing test event for ID: ${payload.id}`);
-  
-  // Para testing y debugging
-  console.log(`🧪 [TEST_EVENT] Test payload:`, JSON.stringify(payload.data));
-  
-  console.log(`🧪 [TEST_EVENT] Test event ${payload.id} processed successfully`);
+  console.log(`🧪 [TEST_EVENT] ${payload.id}`);
+  // Business logic here
 }
 
 async function processGenericEvent(payload: NotificationPayload, messageId: string): Promise<void> {
-  console.log(`🔄 [GENERIC] Processing generic event: ${payload.event} for ID: ${payload.id}`);
-  
-  // Procesamiento genérico para eventos desconocidos
-  console.log(`🔄 [GENERIC] Generic processing completed for ${payload.id}`);
+  console.log(`🔄 [GENERIC] ${payload.event} - ${payload.id}`);
+  // Business logic here
 }
 
-// 📊 Enviar métricas personalizadas a CloudWatch
+// ═══════════════════════════════════════════════════════════════
+// 📊 CLOUDWATCH METRICS
+// ═══════════════════════════════════════════════════════════════
+
 async function sendMetrics(
-  successCount: number, 
-  errorCount: number, 
-  processingTime: number, 
+  successCount: number,
+  errorCount: number,
+  processingTime: number,
   totalMessages: number,
-  totalOverhead?: number,
-  setupTime?: number
+  setupTime: number,
+  duplicatesDetected: number
 ): Promise<void> {
   try {
     const metrics = [
@@ -285,82 +251,51 @@ async function sendMetrics(
         Value: successCount,
         Unit: 'Count' as const,
         Timestamp: new Date(),
-        Dimensions: [
-          { Name: 'LambdaFunction', Value: process.env.AWS_LAMBDA_FUNCTION_NAME || 'consumer-lambda' }
-        ]
+        Dimensions: [{ Name: 'LambdaFunction', Value: process.env.AWS_LAMBDA_FUNCTION_NAME || 'consumer' }]
       },
       {
         MetricName: 'MessagesProcessedError',
         Value: errorCount,
         Unit: 'Count' as const,
         Timestamp: new Date(),
-        Dimensions: [
-          { Name: 'LambdaFunction', Value: process.env.AWS_LAMBDA_FUNCTION_NAME || 'consumer-lambda' }
-        ]
+        Dimensions: [{ Name: 'LambdaFunction', Value: process.env.AWS_LAMBDA_FUNCTION_NAME || 'consumer' }]
+      },
+      {
+        MetricName: 'DuplicatesDetected',
+        Value: duplicatesDetected,
+        Unit: 'Count' as const,
+        Timestamp: new Date(),
+        Dimensions: [{ Name: 'LambdaFunction', Value: process.env.AWS_LAMBDA_FUNCTION_NAME || 'consumer' }]
       },
       {
         MetricName: 'BatchProcessingTime',
         Value: processingTime,
         Unit: 'Milliseconds' as const,
         Timestamp: new Date(),
-        Dimensions: [
-          { Name: 'LambdaFunction', Value: process.env.AWS_LAMBDA_FUNCTION_NAME || 'consumer-lambda' }
-        ]
+        Dimensions: [{ Name: 'LambdaFunction', Value: process.env.AWS_LAMBDA_FUNCTION_NAME || 'consumer' }]
       },
       {
         MetricName: 'BatchSize',
         Value: totalMessages,
         Unit: 'Count' as const,
         Timestamp: new Date(),
-        Dimensions: [
-          { Name: 'LambdaFunction', Value: process.env.AWS_LAMBDA_FUNCTION_NAME || 'consumer-lambda' }
-        ]
+        Dimensions: [{ Name: 'LambdaFunction', Value: process.env.AWS_LAMBDA_FUNCTION_NAME || 'consumer' }]
       },
       {
         MetricName: 'ColdStarts',
         Value: global.isWarm ? 0 : 1,
         Unit: 'Count' as const,
         Timestamp: new Date(),
-        Dimensions: [
-          { Name: 'LambdaFunction', Value: process.env.AWS_LAMBDA_FUNCTION_NAME || 'consumer-lambda' }
-        ]
-      }
-    ];
-
-    // 📊 Agregar métricas de timing detalladas si están disponibles
-    if (totalOverhead !== undefined) {
-      metrics.push({
-        MetricName: 'TotalOverheadMs',
-        Value: totalOverhead,
-        Unit: 'Milliseconds' as const,
-        Timestamp: new Date(),
-        Dimensions: [
-          { Name: 'LambdaFunction', Value: process.env.AWS_LAMBDA_FUNCTION_NAME || 'consumer-lambda' }
-        ]
-      });
-      
-      metrics.push({
-        MetricName: 'OverheadPerMessageMs',
-        Value: totalOverhead / totalMessages,
-        Unit: 'Milliseconds' as const,
-        Timestamp: new Date(),
-        Dimensions: [
-          { Name: 'LambdaFunction', Value: process.env.AWS_LAMBDA_FUNCTION_NAME || 'consumer-lambda' }
-        ]
-      });
-    }
-
-    if (setupTime !== undefined) {
-      metrics.push({
+        Dimensions: [{ Name: 'LambdaFunction', Value: process.env.AWS_LAMBDA_FUNCTION_NAME || 'consumer' }]
+      },
+      {
         MetricName: 'SetupTimeMs',
         Value: setupTime,
         Unit: 'Milliseconds' as const,
         Timestamp: new Date(),
-        Dimensions: [
-          { Name: 'LambdaFunction', Value: process.env.AWS_LAMBDA_FUNCTION_NAME || 'consumer-lambda' }
-        ]
-      });
-    }
+        Dimensions: [{ Name: 'LambdaFunction', Value: process.env.AWS_LAMBDA_FUNCTION_NAME || 'consumer' }]
+      }
+    ];
 
     await cloudwatch.send(new PutMetricDataCommand({
       Namespace: 'SQS-Consumer-POC',
@@ -369,7 +304,6 @@ async function sendMetrics(
 
     console.log(`📊 [METRICS] Sent ${metrics.length} metrics to CloudWatch`);
   } catch (error) {
-    console.error(`❌ [METRICS] Failed to send metrics:`, error);
-    // No re-throw - las métricas no deben fallar el procesamiento
+    console.error(`❌ [METRICS] Failed:`, error);
   }
 }

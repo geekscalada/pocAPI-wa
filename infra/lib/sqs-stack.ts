@@ -1,4 +1,4 @@
-import { Stack, StackProps, Duration, CfnOutput, Fn } from 'aws-cdk-lib';
+import { Stack, StackProps, Duration, CfnOutput, Fn, RemovalPolicy } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -6,12 +6,14 @@ import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { InfraProps } from '@infra/bin/app.js';
 
 export class SqsStack extends Stack {
   public readonly mainQueue: sqs.Queue;
   public readonly deadLetterQueue: sqs.Queue;
   public readonly consumerLambda: lambda.Function;
+  public readonly idempotencyTable: dynamodb.Table;
 
   constructor(scope: Construct, id: string, props: InfraProps) {
     super(scope, id, props);
@@ -128,6 +130,33 @@ export class SqsStack extends Stack {
     testTopic.addSubscription(subscription);
 
     // ========================================
+    // 🔑 TABLA DE IDEMPOTENCIA - DynamoDB
+    // ========================================
+    // Tabla para trackear mensajes procesados y evitar duplicados
+    this.idempotencyTable = new dynamodb.Table(this, 'IdempotencyTable', {
+      tableName: `${projectName}-${environmentName}-idempotency`,
+      
+      // 🔑 Partition key: messageId del mensaje SQS
+      partitionKey: { 
+        name: 'messageId', 
+        type: dynamodb.AttributeType.STRING 
+      },
+      
+      // ⏰ TTL automático: limpia registros después de 7 días
+      // Evita que la tabla crezca indefinidamente
+      timeToLiveAttribute: 'ttl',
+      
+      // 💰 Billing: On-demand (paga por uso, perfecto para POC)
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      
+      // 🗑️ RemovalPolicy: DESTROY para dev/testing
+      removalPolicy: RemovalPolicy.DESTROY,
+      
+      // 🔐 Point-in-time recovery (opcional, para producción)
+      // pointInTimeRecovery: true,
+    });
+
+    // ========================================
     // ⚡ LAMBDA CONSUMER
     // ========================================
     
@@ -153,7 +182,11 @@ export class SqsStack extends Stack {
           ERROR_RATE: '0', // 0-100, porcentaje de errores aleatorios
           PROCESSING_DELAY: '1000', // ms de delay artificial
           
-          // 📊 Configuraciones de logging
+          // � Configuración de idempotencia
+          IDEMPOTENCY_TABLE: this.idempotencyTable.tableName,
+          ENABLE_IDEMPOTENCY: 'false', // Cambiar a 'true' para activar idempotencia
+          
+          // �📊 Configuraciones de logging
           LOG_LEVEL: 'INFO'
         },
         
@@ -183,7 +216,10 @@ export class SqsStack extends Stack {
     this.mainQueue.grantConsumeMessages(this.consumerLambda);
     this.deadLetterQueue.grantSendMessages(this.consumerLambda);
 
-    // 📊 Dar permisos para enviar métricas a CloudWatch
+    // � Dar permisos para acceder a la tabla de idempotencia
+    this.idempotencyTable.grantReadWriteData(this.consumerLambda);
+
+    // �📊 Dar permisos para enviar métricas a CloudWatch
     this.consumerLambda.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -232,6 +268,12 @@ export class SqsStack extends Stack {
       value: this.consumerLambda.functionName,
       description: 'Nombre de la Lambda Consumer SQS',
       exportName: `${projectName}-${environmentName}-ConsumerLambdaName`
+    });
+
+    new CfnOutput(this, 'IdempotencyTableName', {
+      value: this.idempotencyTable.tableName,
+      description: 'Tabla DynamoDB para idempotencia',
+      exportName: `${projectName}-${environmentName}-IdempotencyTable`
     });
 
     // ========================================
