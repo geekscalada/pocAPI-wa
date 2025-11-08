@@ -136,9 +136,9 @@ export class SqsStack extends Stack {
     this.idempotencyTable = new dynamodb.Table(this, 'IdempotencyTable', {
       tableName: `${projectName}-${environmentName}-idempotency`,
       
-      // 🔑 Partition key: messageId del mensaje SQS
+      // 🔑 Partition key: 'id' es el nombre que usa Lambda Powertools por defecto
       partitionKey: { 
-        name: 'messageId', 
+        name: 'id', 
         type: dynamodb.AttributeType.STRING 
       },
       
@@ -182,9 +182,9 @@ export class SqsStack extends Stack {
           ERROR_RATE: '0', // 0-100, porcentaje de errores aleatorios
           PROCESSING_DELAY: '1000', // ms de delay artificial
           
-          // � Configuración de idempotencia
+          // 🔑 Configuración de idempotencia
           IDEMPOTENCY_TABLE: this.idempotencyTable.tableName,
-          ENABLE_IDEMPOTENCY: 'false', // Cambiar a 'true' para activar idempotencia
+          ENABLE_IDEMPOTENCY: 'true', // Cambiar a 'true' para activar idempotencia
           
           // �📊 Configuraciones de logging
           LOG_LEVEL: 'INFO'

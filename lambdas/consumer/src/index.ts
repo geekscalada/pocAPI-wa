@@ -97,7 +97,7 @@ async function processBusinessLogic(record: SQSRecord): Promise<void> {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 📨 MAIN HANDLER (with idempotency wrapper applied)
+// 📨 MAIN HANDLER (with conditional idempotency)
 // ═══════════════════════════════════════════════════════════════
 
 const handlerLogic = async (event: SQSEvent, context: Context) => {
@@ -107,9 +107,12 @@ const handlerLogic = async (event: SQSEvent, context: Context) => {
   const isColdStart = !global.isWarm;
   global.isWarm = true;
   
+  // Check if idempotency is enabled
+  const idempotencyEnabled = process.env.ENABLE_IDEMPOTENCY === 'true';
+  
   console.log(`🚀 [CONSUMER] Batch size: ${event.Records.length}`);
   console.log(`🔥 [COLD START] ${isColdStart ? 'YES ❄️' : 'NO 🔥'}`);
-  console.log(`🔑 [IDEMPOTENCY] ENABLED ✅`);
+  console.log(`🔑 [IDEMPOTENCY] ${idempotencyEnabled ? 'ENABLED ✅' : 'DISABLED ⚠️'}`);
 
   const setupCompleteTime = Date.now();
   const setupOverhead = setupCompleteTime - handlerStartTime;
@@ -173,14 +176,17 @@ const handlerLogic = async (event: SQSEvent, context: Context) => {
   };
 };
 
-// Apply idempotency wrapper to the handler (exact pattern as proposed)
-export const handler = makeIdempotent(
-  handlerLogic,
-  {
-    persistenceStore: persistence,
-    config: idempotencyConfig
-  }
-);
+// ═══════════════════════════════════════════════════════════════
+// 🎯 EXPORT HANDLER (with conditional idempotency wrapper)
+// ═══════════════════════════════════════════════════════════════
+
+// Apply idempotency wrapper only if enabled via environment variable
+export const handler = process.env.ENABLE_IDEMPOTENCY === 'true'
+  ? makeIdempotent(handlerLogic, {
+      persistenceStore: persistence,
+      config: idempotencyConfig
+    })
+  : handlerLogic;
 
 
 
