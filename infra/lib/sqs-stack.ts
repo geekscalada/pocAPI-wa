@@ -134,7 +134,7 @@ export class SqsStack extends Stack {
     // ========================================
     // Tabla para trackear mensajes procesados y evitar duplicados
     this.idempotencyTable = new dynamodb.Table(this, 'IdempotencyTable', {
-      tableName: `${projectName}-${environmentName}-idempotency`,
+      tableName: `${projectName}-${environmentName}-idempotency-v2`,
       
       // 🔑 Partition key: 'id' es el nombre que usa Lambda Powertools por defecto
       partitionKey: { 
