@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "build-esbuild": "esbuild src/index.ts --bundle --minify --sourcemap --platform=node --target=node20 --format=esm --outfile=dist/index.mjs --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\" --log-level=warning --define:Reflect.decorate=true",
-    "build": "tsc && mkdir -p dist && cp package.json ./dist/ && npm install --prefix ./dist"
+    "build": "tsc && mkdir -p dist && cp package.json ./dist/ && npm install --prefix ./dist",
+    "manualdeploy_linux": "npm run build-esbuild && cd dist && zip -r /mnt/c/Users/jose/Desktop/lambda-consumer-$(date +%Y-%m-%d_%H_%M_%S).zip . && cd .. && echo '✅ Package created:' && ls -lh lambda-consumer-*.zip | tail -1"
   },
   "author": "",
   "license": "ISC",
@@ -14,6 +15,8 @@
     "@aws-lambda-powertools/idempotency": "^2.10.0",
     "@aws-sdk/client-cloudwatch": "^3.915.0",
     "@aws-sdk/client-dynamodb": "^3.915.0",
+    "@aws-sdk/lib-dynamodb": "^3.927.0",
+    "@aws-sdk/util-dynamodb": "^3.927.0",
     "@types/node": "^22.10.2",
     "aws-sdk": "^2.1692.0",
     "class-transformer": "^0.5.1",
