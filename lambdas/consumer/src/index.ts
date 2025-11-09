@@ -102,6 +102,8 @@ async function processBusinessLogic(record: SQSRecord): Promise<void> {
 
 const handlerLogic = async (event: SQSEvent, context: Context) => {
   const handlerStartTime = Date.now();
+
+  
   
   // Cold start detection
   const isColdStart = !global.isWarm;
@@ -128,6 +130,28 @@ const handlerLogic = async (event: SQSEvent, context: Context) => {
   // Process each record in the batch
   const results = await Promise.allSettled(
     event.Records.map(async (record) => {
+      // 🐛 DEBUG: Log complete record structure
+      console.log('═══════════════════════════════════════');
+      console.log('📦 [DEBUG] SQS Record completo:');
+      console.log(JSON.stringify(record, null, 2));
+      console.log('───────────────────────────────────────');
+      console.log('🆔 [DEBUG] MessageId:', record.messageId);
+      console.log('📄 [DEBUG] Body (raw string):', record.body);
+      
+      try {
+        const snsNotification = JSON.parse(record.body);
+        console.log('📨 [DEBUG] SNS Notification:', JSON.stringify(snsNotification, null, 2));
+        console.log('📝 [DEBUG] SNS Message (raw):', snsNotification.Message);
+        
+        const payload = JSON.parse(snsNotification.Message);
+        console.log('🎯 [DEBUG] Payload parseado:', JSON.stringify(payload, null, 2));
+        console.log('🔑 [DEBUG] Payload ID:', payload.id);
+        console.log('📌 [DEBUG] Payload Event:', payload.event);
+      } catch (error) {
+        console.error('❌ [DEBUG] Error parsing:', error);
+      }
+      console.log('═══════════════════════════════════════');
+      
       await processBusinessLogic(record);
       return 'success';
     })

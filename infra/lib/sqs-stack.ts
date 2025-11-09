@@ -56,6 +56,7 @@ export class SqsStack extends Stack {
       visibilityTimeout: Duration.minutes(6), // Tiempo para procesar mensaje (debe ser > lambda timeout)
       retentionPeriod: Duration.days(4), // Cuánto tiempo mantener mensajes (1-14 días)
       receiveMessageWaitTime: Duration.seconds(20), // Long polling (0-20s, recomendado >0)
+      deliveryDelay: Duration.seconds(90), // ⏳ Retraso en la entrega de mensajes (0-900s)
       
       // 🔄 CONFIGURACIÓN DE REINTENTOS
       // Aquí es donde se enlazan las 2 colas
