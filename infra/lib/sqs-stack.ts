@@ -98,8 +98,8 @@ export class SqsStack extends Stack {
     
     // Crear la suscripción con configuraciones avanzadas
     const subscription = new snsSubscriptions.SqsSubscription(this.mainQueue, {
-      // 📝 FORMATO DE MENSAJE
-      rawMessageDelivery: true, // true = mensaje directo, false = envuelto en metadata SNS
+      // 📝 FORMATO DE MENSAJE - 🚨 false para FIFO (consumer espera wrapper SNS)
+      rawMessageDelivery: false, // false = envuelto en metadata SNS (necesario para FIFO)
       
       // 🎯 FILTROS DE MENSAJES (opcional)
       // Procesa solo mensajes que cumplan criterios específicos

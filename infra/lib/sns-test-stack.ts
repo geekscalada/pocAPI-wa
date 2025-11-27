@@ -6,11 +6,11 @@ export class SnsTestStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
-    // Topic name without slashes
+    // Topic name without slashes - 🚨 FIFO habilitado para suscripción con SQS FIFO
     const topic = new sns.Topic(this, "TestTopic", {
-      topicName: "test",
-      // fifo: true,             // uncomment if you need FIFO
-      // contentBasedDeduplication: true
+      topicName: "test.fifo",             // 🚨 FIFO requiere sufijo .fifo
+      fifo: true,                         // ✅ Habilitado para compatibilidad con SQS FIFO
+      contentBasedDeduplication: true     // ✅ Deduplicación automática
     });
 
     new CfnOutput(this, "TestTopicArn", {
