@@ -24,8 +24,8 @@ export class SqsStack extends Stack {
     // 🚨 DEAD LETTER QUEUE (DLQ)
     // ========================================
     // Para mensajes que fallan repetidamente
-    this.deadLetterQueue = new sqs.Queue(this, 'DeadLetterQueue', {
-      queueName: `${projectName}-${environmentName}-dlq`,
+    this.deadLetterQueue = new sqs.Queue(this, 'DeadLetterQueue.fifo', {
+      queueName: `${projectName}-${environmentName}-dlq.fifo`,
       
       // ⏱️ Retención de mensajes en DLQ (1-14 días)
       retentionPeriod: Duration.days(14), // Máximo tiempo en DLQ
@@ -50,7 +50,7 @@ export class SqsStack extends Stack {
     // ========================================
     // 📬 COLA PRINCIPAL SQS (FIFO - Para Testing)
     // ========================================
-    this.mainQueue = new sqs.Queue(this, 'MainQueue', {
+    this.mainQueue = new sqs.Queue(this, 'MainQueue.fifo', {
       queueName: `${projectName}-${environmentName}-main-queue.fifo`, // 🚨 FIFO requiere sufijo .fifo
       
       // ⏱️ CONFIGURACIONES DE TIEMPO - 🧪 OPTIMIZADAS PARA TEST
