@@ -52,16 +52,16 @@ export class SqsStack extends Stack {
     this.mainQueue = new sqs.Queue(this, 'MainQueue', {
       queueName: `${projectName}-${environmentName}-main-queue.fifo`, // 🚨 FIFO requiere sufijo .fifo
       
-      // ⏱️ CONFIGURACIONES DE TIEMPO
-      visibilityTimeout: Duration.minutes(6), // Tiempo para procesar mensaje (debe ser > lambda timeout)
+      // ⏱️ CONFIGURACIONES DE TIEMPO - 🧪 OPTIMIZADAS PARA TEST
+      visibilityTimeout: Duration.minutes(3), // 3 min para test (mensaje bloquea cola mientras se procesa)
       retentionPeriod: Duration.days(4), // Cuánto tiempo mantener mensajes (1-14 días)      
       deliveryDelay: Duration.seconds(0), // ⏳ FIFO no soporta deliveryDelay > 0
       
-      // 🔄 CONFIGURACIÓN DE REINTENTOS
-      // Aquí es donde se enlazan las 2 colas
+      // 🔄 CONFIGURACIÓN DE REINTENTOS - 🧪 SOLO 1 REINTENTO PARA TEST
+      // Estrategia: A1 falla 1 vez, va a DLQ, desbloquea cola para A2-A5
       deadLetterQueue: {
         queue: this.deadLetterQueue,
-        maxReceiveCount: 3, // Intentos antes de ir a DLQ (1-1000)
+        maxReceiveCount: 1, // 🧪 Solo 1 intento antes de DLQ (para test rápido)
       },
       
       // 🔒 SEGURIDAD Y ENCRIPTACIÓN
@@ -198,12 +198,13 @@ export class SqsStack extends Stack {
 
     // 🔗 Conectar la cola SQS con la Lambda
     const sqsEventSource = new lambdaEventSources.SqsEventSource(this.mainQueue, {
-      // 📦 Configuración de batching - 🧪 OPTIMIZADO PARA TEST FIFO
-      batchSize: 3, // Max 10 mensajes por batch (suficiente para agrupar A1, A2, A3)
-      maxBatchingWindow: Duration.seconds(90), // Esperar 5s para agrupar mensajes en batch
+      // 📦 Configuración de batching - 🧪 NUEVA ESTRATEGIA
+      // Procesa hasta 5 mensajes por batch (suficiente para A2, A3, A4, A5)
+      batchSize: 5, // ✅ Permite agrupar A2-A5 después de que A1 vaya a DLQ
+      // ⚠️ maxBatchingWindow NO soportado en FIFO queues
       
       // 🔄 Configuración de concurrencia  
-      maxConcurrency: 2, // Reducido a 2 para evitar procesamiento paralelo durante tests
+      maxConcurrency: 1, // ✅ Solo 1 invocación a la vez para garantizar orden en test
       
       // 🎯 Configuración de errores - ✅ CRÍTICO PARA EL TEST
       reportBatchItemFailures: true, // Permite partial batch failures (comportamiento a validar)
