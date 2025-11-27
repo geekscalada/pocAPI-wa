@@ -171,7 +171,7 @@ export class SqsStack extends Stack {
         runtime: lambda.Runtime.NODEJS_20_X,
         code: lambda.Code.fromAsset('../lambdas/consumer/dist'),
         handler: 'index.handler',
-        timeout: Duration.minutes(5), // Debe ser < visibilityTimeout de SQS (6min)
+        timeout: Duration.minutes(2), // Debe ser < visibilityTimeout de SQS (6min)
         
         // 🌍 Variables de entorno para configuración
         environment: {
