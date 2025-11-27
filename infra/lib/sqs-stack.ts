@@ -204,7 +204,7 @@ export class SqsStack extends Stack {
       // ⚠️ maxBatchingWindow NO soportado en FIFO queues
       
       // 🔄 Configuración de concurrencia  
-      maxConcurrency: 1, // ✅ Solo 1 invocación a la vez para garantizar orden en test
+      maxConcurrency: 2, // ✅ Solo 1 invocación a la vez para garantizar orden en test
       
       // 🎯 Configuración de errores - ✅ CRÍTICO PARA EL TEST
       reportBatchItemFailures: true, // Permite partial batch failures (comportamiento a validar)
