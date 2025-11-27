@@ -47,16 +47,15 @@ export class SqsStack extends Stack {
     });
 
     // ========================================
-    // 📬 COLA PRINCIPAL SQS
+    // 📬 COLA PRINCIPAL SQS (FIFO - Para Testing)
     // ========================================
     this.mainQueue = new sqs.Queue(this, 'MainQueue', {
-      queueName: `${projectName}-${environmentName}-main-queue`,
+      queueName: `${projectName}-${environmentName}-main-queue.fifo`, // 🚨 FIFO requiere sufijo .fifo
       
       // ⏱️ CONFIGURACIONES DE TIEMPO
       visibilityTimeout: Duration.minutes(6), // Tiempo para procesar mensaje (debe ser > lambda timeout)
-      retentionPeriod: Duration.days(4), // Cuánto tiempo mantener mensajes (1-14 días)
-      receiveMessageWaitTime: Duration.seconds(20), // Long polling (0-20s, recomendado >0)
-      deliveryDelay: Duration.seconds(90), // ⏳ Retraso en la entrega de mensajes (0-900s)
+      retentionPeriod: Duration.days(4), // Cuánto tiempo mantener mensajes (1-14 días)      
+      deliveryDelay: Duration.seconds(0), // ⏳ FIFO no soporta deliveryDelay > 0
       
       // 🔄 CONFIGURACIÓN DE REINTENTOS
       // Aquí es donde se enlazan las 2 colas
@@ -72,11 +71,11 @@ export class SqsStack extends Stack {
       // 📦 CONFIGURACIONES DE MENSAJE
       // maxMessageSizeBytes: 262144, // Tamaño máximo de mensaje (1024-262144 bytes)
       
-      // 🚦 CONFIGURACIONES FIFO (descomentrar para cola FIFO)
-      // fifo: true, // Habilita FIFO (orden garantizado)
-      // contentBasedDeduplication: true, // Deduplicación automática por contenido
-      // deduplicationScope: sqs.DeduplicationScope.MESSAGE_GROUP, // QUEUE o MESSAGE_GROUP
-      // fifoThroughputLimit: sqs.FifoThroughputLimit.PER_MESSAGE_GROUP_ID, // PER_QUEUE o PER_MESSAGE_GROUP_ID
+      // 🚦 CONFIGURACIONES FIFO - ✅ HABILITADAS PARA TESTING
+      fifo: true, // ✅ Habilita FIFO (orden garantizado)
+      contentBasedDeduplication: true, // ✅ Deduplicación automática por contenido (evita MessageDeduplicationId obligatorio)
+      deduplicationScope: sqs.DeduplicationScope.MESSAGE_GROUP, // Deduplicación por grupo
+      fifoThroughputLimit: sqs.FifoThroughputLimit.PER_MESSAGE_GROUP_ID, // Throughput por grupo (mejor performance)
       
       // 🏷️ TAGS PARA ORGANIZACIÓN Y COSTOS
       // tags: {
@@ -199,15 +198,15 @@ export class SqsStack extends Stack {
 
     // 🔗 Conectar la cola SQS con la Lambda
     const sqsEventSource = new lambdaEventSources.SqsEventSource(this.mainQueue, {
-      // 📦 Configuración de batching
-      batchSize: 5, // 1-10 mensajes por invocación (ajustar según processing time)
-      maxBatchingWindow: Duration.seconds(10), // Esperar max 10s para llenar batch
+      // 📦 Configuración de batching - 🧪 OPTIMIZADO PARA TEST FIFO
+      batchSize: 3, // Max 10 mensajes por batch (suficiente para agrupar A1, A2, A3)
+      maxBatchingWindow: Duration.seconds(90), // Esperar 5s para agrupar mensajes en batch
       
       // 🔄 Configuración de concurrencia  
-      maxConcurrency: 5, // Máximo 5 lambdas procesando simultáneamente (específico para SQS)
+      maxConcurrency: 2, // Reducido a 2 para evitar procesamiento paralelo durante tests
       
-      // 🎯 Configuración de errores
-      reportBatchItemFailures: true, // Permite partial batch failures
+      // 🎯 Configuración de errores - ✅ CRÍTICO PARA EL TEST
+      reportBatchItemFailures: true, // Permite partial batch failures (comportamiento a validar)
     });
 
     // 🔌 Añadir el event source a la lambda

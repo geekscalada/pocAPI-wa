@@ -66,6 +66,18 @@ async function processBusinessLogic(record: SQSRecord): Promise<void> {
 
   console.log(`🎯 [EVENT] ${payload.event} | ID: ${payload.id}`);
 
+  // 🧪 FIFO BATCH TESTING: Fallo selectivo de A2
+  // Si el ID del mensaje es "A2", forzar error para validar comportamiento de batchItemFailures
+  if (payload.id === 'A2') {
+    console.error(`🚨 [FIFO TEST] Forzando fallo de mensaje A2 para testing de batchItemFailures`);
+    throw new Error(`❌ Fallo intencional del mensaje A2 - Testing FIFO batch behavior`);
+  }
+
+  // Logging especial para validar que A3 se procesa (o no)
+  if (payload.id === 'A3') {
+    console.warn(`⚠️ [FIFO TEST] Procesando A3 - Este mensaje NO debería procesarse si A2 falló en el mismo batch`);
+  }
+
   // Configuration for error simulation
   const config: ProcessingConfig = {
     forceError: process.env.FORCE_ERROR === 'true',

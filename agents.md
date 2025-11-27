@@ -103,60 +103,81 @@ pocAPI-wa/
 - Lambda procesa automáticamente el archivo
 - Resultado guardado en S3 (`output/`)
 
-### 2. **Sistema de Notificaciones (Parcial - En Exploración)**
+### 2. **Sistema de Mensajería Event-Driven (Completo)**
 - **Producer**: Lambda publisher envía eventos a SNS ✅
 - **SNS Topic**: Recibe y distribuye mensajes ✅  
-- **SQS Integration**: Pendiente de implementar 🚧
-- **Consumer**: Lambda para procesar colas, pendiente 🚧
-- **Patrón Completo**: Producer -> SNS -> SQS -> Consumer (en progreso)
+- **SQS FIFO Queue**: Cola con orden garantizado ✅
+- **Consumer**: Lambda procesa mensajes de SQS ✅
+- **Patrón Completo**: Producer -> SNS -> SQS FIFO -> Consumer ✅
+- **Features**:
+  - Soporte para FIFO con `MessageGroupId`
+  - Batch processing con `batchItemFailures`
+  - Dead Letter Queue (DLQ) para manejo de errores
+  - Idempotency con DynamoDB y Lambda Powertools
 
 ### 3. **Pipeline Multi-Entorno**
 - Despliegue automatizado en diferentes entornos (dev, pre, pro)
 - Triggered por cambios en ramas específicas de GitHub
 - Gestión de configuraciones por entorno
 
-## 🧪 Exploración Actual: Patrón Producer -> SNS -> SQS -> Consumer
+### 4. **🧪 Testing FIFO + batchItemFailures (Laboratorio Activo)**
+- **Objetivo**: Validar comportamiento de SQS FIFO con fallos parciales en batch
+- **Escenario**: Mensajes A1, A2 (falla), A3 en el mismo grupo
+- **Hipótesis**: A3 se procesa aunque A2 falle, si no se bloquea manualmente
+- **Documentación**: `FIFO-BATCH-TESTING-GUIDE.md` y `docs/FIFO-Batch-Test-Design.md`
+- **Script**: `test-fifo-batch-behavior.sh`
+
+## 🧪 Laboratorio Activo: FIFO + batchItemFailures Deep Dive
 
 ### 🎯 **Objetivo de Aprendizaje Actual**
-Estoy explorando el patrón de **mensajería asíncrona** con colas de AWS para entender cómo funcionan los sistemas event-driven y el desacoplamiento de componentes.
+Estoy validando el comportamiento de **SQS FIFO** con **batch processing** y **batchItemFailures** para entender:
+- ¿Cómo funciona el orden FIFO cuando hay fallos parciales en un batch?
+- ¿Qué pasa con mensajes posteriores si un mensaje intermedio falla?
+- ¿Es suficiente con reportar solo el mensaje fallido en `batchItemFailures`?
 
-### ✅ **Componentes YA Implementados:**
+### ✅ **Implementación Completa del Patrón:**
 
-#### 1. **Producer** ✅ 
-- **Lambda Publisher**: Funciona correctamente
-- **Envío a SNS**: Utiliza AWS SDK v3 (`SNSClient`, `PublishCommand`)
-- **Message Attributes**: Configurado con metadata y tipos de evento
-- **Permisos**: IAM configurado para publicar en SNS
+#### 1. **Producer (Publisher Lambda)** ✅ 
+- Envía mensajes a SNS con `MessageGroupId`
+- Soporta FIFO con atributos personalizados
+- Expone API REST vía API Gateway
 
 #### 2. **SNS Topic** ✅
-- **Topic "test"**: Creado y funcional
-- **Cross-Stack Integration**: ARN exportado entre stacks
-- **Subscription Ready**: Preparado para recibir suscripciones
+- Topic "test" para distribuir eventos
+- Suscripción a SQS FIFO configurada
 
-### ❌ **Componentes PENDIENTES:**
+#### 3. **SQS FIFO Queue** ✅
+- Cola `.fifo` con orden garantizado
+- `contentBasedDeduplication` habilitado
+- Dead Letter Queue (DLQ) configurada
+- `maxReceiveCount: 3`
 
-#### 3. **SQS Queue** 🚧 (En exploración)
-- **Cola Principal**: Para recibir mensajes del SNS
-- **Dead Letter Queue (DLQ)**: Para manejo de errores y reintentos
-- **Configuración**: Visibility timeout, message retention, etc.
+#### 4. **Consumer Lambda** ✅
+- Procesa mensajes en batch
+- Usa `batchItemFailures` para reintentos parciales
+- Lógica especial: Falla automáticamente si `id === "A2"`
+- Logging avanzado para validar comportamiento
 
-#### 4. **SNS -> SQS Subscription** � (En exploración)
-- **Suscripción**: Conectar el topic SNS con la cola SQS
-- **Filter Policy**: Opcional, para filtrar mensajes por tipo
-- **Raw Message Delivery**: Configuración de formato de mensaje
+### 🔬 **Experimento Actual:**
 
-#### 5. **Consumer Lambda** 🚧 (Próximo paso)
-- **Event Source Mapping**: SQS como trigger de Lambda
-- **Batch Processing**: Procesamiento por lotes de mensajes
-- **Error Handling**: Gestión de fallos y DLQ
-- **Message Deletion**: Confirmación de procesamiento exitoso
+**Escenario de Test:**
+```
+Grupo FIFO: "test-group-A"
+Mensajes: A1 → A2 → A3
 
-### 🎓 **Aprendizajes Objetivo:**
-- **Desacoplamiento**: Separación entre productores y consumidores
-- **Escalabilidad**: Manejo de picos de carga con colas
-- **Resilencia**: Reintentos automáticos y manejo de errores
-- **Observabilidad**: Métricas de colas y procesamiento
-- **Patrones Event-Driven**: Arquitecturas basadas en eventos
+Resultado esperado:
+- A1: ✅ Procesa OK
+- A2: ❌ Falla intencionalmente  
+- A3: ⚠️ Se procesa (validar si esto es correcto)
+```
+
+**Hipótesis a validar:**
+> "Si solo reporto A2 en `batchItemFailures`, Lambda considera A3 como procesado exitosamente, rompiendo potencialmente el orden FIFO."
+
+### 🎓 **Aprendizajes Clave:**
+- `batchItemFailures` solo reporta **lo que falló**, no lo que debe bloquearse
+- FIFO requiere **gestión manual** de mensajes posteriores al fallo
+- Solución: Reportar **todos los mensajes desde el fallo en adelante**
 
 ## �🚀 Características del Laboratorio
 

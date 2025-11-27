@@ -17,7 +17,8 @@ export const handler = async (event: APIGatewayProxyEvent, context: Context): Pr
       id, 
       data, 
       forceError = false,
-      subject 
+      subject,
+      messageGroupId  // 🚨 NUEVO: Para FIFO
     } = body;
     
     // Construir payload
@@ -38,6 +39,11 @@ export const handler = async (event: APIGatewayProxyEvent, context: Context): Pr
     
     if (forceError) {
       attributes.forceError = { DataType: 'String', StringValue: 'true' };
+    }
+    
+    // 🚨 NUEVO: Añadir MessageGroupId para FIFO
+    if (messageGroupId) {
+      attributes.messageGroupId = { DataType: 'String', StringValue: messageGroupId };
     }
     
     // Publicar a SNS
