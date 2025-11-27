@@ -36,6 +36,7 @@ export class SqsStack extends Stack {
       
       // 📊 Configuraciones adicionales para DLQ
       visibilityTimeout: Duration.minutes(5), // Tiempo para procesar mensaje fallido
+      fifo: true;
       
       // 🏷️ Tags para organización
       // tags: {
