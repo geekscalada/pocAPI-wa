@@ -13,28 +13,80 @@ export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
   console.log(`📦 Batch Size: ${event.Records.length} mensajes`);
   console.log(`${'='.repeat(70)}\n`);
 
-  const failedMessageIds: string[] = [];
-
-  // Procesar cada mensaje
-  for (let i = 0; i < event.Records.length; i++) {
-    const record = event.Records[i];
-    
-    try {
-      await processMessage(record, i + 1, event.Records.length);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`❌ Mensaje ${i + 1} FALLÓ: ${errorMessage}\n`);
-      failedMessageIds.push(record.messageId);
+  // Agrupar mensajes por MessageGroupId
+  const messagesByGroup = new Map<string, SQSRecord[]>();
+  event.Records.forEach(record => {
+    const groupId = record.attributes.MessageGroupId || 'default';
+    if (!messagesByGroup.has(groupId)) {
+      messagesByGroup.set(groupId, []);
     }
+    messagesByGroup.get(groupId)!.push(record);
+  });
+
+  console.log(`📊 Grupos detectados: ${messagesByGroup.size}`);
+  messagesByGroup.forEach((records, groupId) => {
+    console.log(`   📁 Grupo "${groupId}": ${records.length} mensaje(s)`);
+  });
+  console.log();
+
+  const failedMessageIds: string[] = [];
+  const blockedGroups = new Set<string>();
+
+  // Procesar cada grupo
+  for (const [groupId, records] of messagesByGroup.entries()) {
+    console.log(`\n${'┌'.repeat(35)} GRUPO: ${groupId} ${'┐'.repeat(35 - groupId.length)}`);
+    
+    let firstFailureInGroup = -1;
+
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i];
+      const globalIndex = event.Records.indexOf(record) + 1;
+
+      // Si ya falló un mensaje anterior en este grupo, bloquear este también
+      if (firstFailureInGroup !== -1) {
+        console.log(`🔒 Mensaje ${i + 1} BLOQUEADO (grupo ${groupId} tiene fallo previo)`);
+        failedMessageIds.push(record.messageId);
+        continue;
+      }
+
+      try {
+        await processMessage(record, globalIndex, event.Records.length, groupId);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`❌ Mensaje ${i + 1} FALLÓ: ${errorMessage}`);
+        
+        // Marcar el primer fallo de este grupo
+        firstFailureInGroup = i;
+        blockedGroups.add(groupId);
+        failedMessageIds.push(record.messageId);
+        
+        console.log(`\n🛑 FIFO: Bloqueando grupo "${groupId}" desde mensaje ${i + 1}`);
+        console.log(`   Los siguientes mensajes de este grupo serán reportados como fallidos\n`);
+
+        // Bloquear todos los mensajes posteriores del mismo grupo
+        for (let j = i + 1; j < records.length; j++) {
+          failedMessageIds.push(records[j].messageId);
+          console.log(`   🔒 Bloqueando mensaje ${j + 1} del grupo "${groupId}"`);
+        }
+        break; // Salir del loop de este grupo
+      }
+    }
+
+    console.log(`${'└'.repeat(70)}\n`);
   }
 
   // Resumen
   const successCount = event.Records.length - failedMessageIds.length;
   console.log(`\n${'='.repeat(70)}`);
-  console.log(`📊 RESUMEN:`);
-  console.log(`   Total:   ${event.Records.length}`);
-  console.log(`   Éxitos:  ${successCount}`);
-  console.log(`   Fallos:  ${failedMessageIds.length}`);
+  console.log(`📊 RESUMEN FINAL:`);
+  console.log(`   Total mensajes:     ${event.Records.length}`);
+  console.log(`   Grupos totales:     ${messagesByGroup.size}`);
+  console.log(`   Grupos bloqueados:  ${blockedGroups.size}`);
+  console.log(`   Mensajes exitosos:  ${successCount}`);
+  console.log(`   Mensajes fallidos:  ${failedMessageIds.length}`);
+  if (blockedGroups.size > 0) {
+    console.log(`   🔒 Grupos con orden preservado: ${Array.from(blockedGroups).join(', ')}`);
+  }
   console.log(`${'='.repeat(70)}\n`);
 
   // Retornar batch item failures si hay errores
@@ -49,9 +101,9 @@ export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
   return { batchItemFailures: [] };
 };
 
-async function processMessage(record: SQSRecord, index: number, total: number): Promise<void> {
+async function processMessage(record: SQSRecord, index: number, total: number, groupId?: string): Promise<void> {
   console.log(`${'─'.repeat(70)}`);
-  console.log(`📨 MENSAJE ${index}/${total}`);
+  console.log(`📨 MENSAJE ${index}/${total}${groupId ? ` [Grupo: ${groupId}]` : ''}`);
   console.log(`🆔 MessageId: ${record.messageId.substring(0, 30)}...`);
   console.log(`🔢 ReceiveCount: ${record.attributes.ApproximateReceiveCount}`);
 

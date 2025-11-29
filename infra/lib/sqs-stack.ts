@@ -63,7 +63,7 @@ export class SqsStack extends Stack {
       // Estrategia: A1 falla 1 vez, va a DLQ, desbloquea cola para A2-A5
       deadLetterQueue: {
         queue: this.deadLetterQueue,
-        maxReceiveCount: 1, // 🧪 Solo 1 intento antes de DLQ (para test rápido)
+        maxReceiveCount: 2, // 🧪 Solo 1 intento antes de DLQ (para test rápido)
       },
       
       // 🔒 SEGURIDAD Y ENCRIPTACIÓN

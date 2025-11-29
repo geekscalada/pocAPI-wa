@@ -27,7 +27,7 @@ export const handler = async (event: APIGatewayProxyEvent, context: Context): Pr
       id: id || `test-${Date.now()}`,
       data: data || { test: true, timestamp: new Date().toISOString() },
       source: 'testing-api',
-      forceError: shouldFail
+      shouldFail
     };
     
     // Preparar atributos del mensaje
