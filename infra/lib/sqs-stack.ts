@@ -21,146 +21,47 @@ export class SqsStack extends Stack {
 
     const { projectName, environmentName } = props;
 
-    // ========================================
-    // 🚨 DEAD LETTER QUEUE (DLQ)
-    // ========================================
-    // Para mensajes que fallan repetidamente
     this.deadLetterQueue = new sqs.Queue(this, 'DeadLetterQueue.fifo', {
       queueName: `${projectName}-${environmentName}-dlq.fifo`,
-      
-      // ⏱️ Retención de mensajes en DLQ (1-14 días)
-      retentionPeriod: Duration.days(14), // Máximo tiempo en DLQ
-      
-      // 🔒 Encriptación 
-      // encryption: sqs.QueueEncryption.KMS_MANAGED, // o SQS_MANAGED para menos costo
-      // encryptionMasterKey: key, // Clave KMS personalizada si necesitas
-      
-      // 📊 Configuraciones adicionales para DLQ
-      visibilityTimeout: Duration.minutes(5), // Tiempo para procesar mensaje fallido
+      retentionPeriod: Duration.days(14),
+      visibilityTimeout: Duration.minutes(5),
       fifo: true,
-      
-      // 🏷️ Tags para organización
-      // tags: {
-      //   Environment: environmentName,
-      //   Project: projectName,
-      //   Purpose: 'DeadLetterQueue',
-      //   CostCenter: 'Development'
-      // }
     });
 
-    // ========================================
-    // 📬 COLA PRINCIPAL SQS (FIFO - Para Testing)
-    // ========================================
     this.mainQueue = new sqs.Queue(this, 'MainQueue.fifo', {
-      queueName: `${projectName}-${environmentName}-main-queue.fifo`, // 🚨 FIFO requiere sufijo .fifo
-      
-      // ⏱️ CONFIGURACIONES DE TIEMPO - 🧪 OPTIMIZADAS PARA TEST
-      visibilityTimeout: Duration.minutes(3), // 3 min para test (mensaje bloquea cola mientras se procesa)
-      retentionPeriod: Duration.days(4), // Cuánto tiempo mantener mensajes (1-14 días)      
-      deliveryDelay: Duration.seconds(0), // ⏳ FIFO no soporta deliveryDelay > 0
-      
-      // 🔄 CONFIGURACIÓN DE REINTENTOS - 🧪 SOLO 1 REINTENTO PARA TEST
-      // Estrategia: A1 falla 1 vez, va a DLQ, desbloquea cola para A2-A5
+      queueName: `${projectName}-${environmentName}-main-queue.fifo`,
+      visibilityTimeout: Duration.minutes(3),
+      retentionPeriod: Duration.days(4),
+      deliveryDelay: Duration.seconds(0),
       deadLetterQueue: {
         queue: this.deadLetterQueue,
-        maxReceiveCount: 2, // 🧪 Solo 1 intento antes de DLQ (para test rápido)
+        maxReceiveCount: 2,
       },
-      
-      // 🔒 SEGURIDAD Y ENCRIPTACIÓN
-      // encryption: sqs.QueueEncryption.KMS_MANAGED, // Opciones: UNENCRYPTED, SQS_MANAGED, KMS_MANAGED
-      // encryptionMasterKey: key, // Clave KMS personalizada
-      
-      // 📦 CONFIGURACIONES DE MENSAJE
-      // maxMessageSizeBytes: 262144, // Tamaño máximo de mensaje (1024-262144 bytes)
-      
-      // 🚦 CONFIGURACIONES FIFO - ✅ HABILITADAS PARA TESTING
-      fifo: true, // ✅ Habilita FIFO (orden garantizado)
-      contentBasedDeduplication: true, // ✅ Deduplicación automática por contenido (evita MessageDeduplicationId obligatorio)
-      deduplicationScope: sqs.DeduplicationScope.MESSAGE_GROUP, // Deduplicación por grupo
-      fifoThroughputLimit: sqs.FifoThroughputLimit.PER_MESSAGE_GROUP_ID, // Throughput por grupo (mejor performance)
-      
-      // 🏷️ TAGS PARA ORGANIZACIÓN Y COSTOS
-      // tags: {
-      //   Environment: environmentName,
-      //   Project: projectName,
-      //   Purpose: 'MainProcessingQueue',
-      //   CostCenter: 'Development',
-      //   DataClassification: 'Internal'
-      // }
+      fifo: true,
+      contentBasedDeduplication: true,
+      deduplicationScope: sqs.DeduplicationScope.MESSAGE_GROUP,
+      fifoThroughputLimit: sqs.FifoThroughputLimit.PER_MESSAGE_GROUP_ID,
     });
 
-    // ========================================
-    // 🔗 SUSCRIPCIÓN SNS -> SQS
-    // ========================================
-    
-    // Usar referencia directa si está disponible para evitar ImportValue y bloqueos de export
     const testTopic = props.testTopic ?? sns.Topic.fromTopicArn(this, 'ImportedTestTopic', Fn.importValue("TestTopicArn"));
     
-    // Crear la suscripción con configuraciones avanzadas
     const subscription = new snsSubscriptions.SqsSubscription(this.mainQueue, {
-      // 📝 FORMATO DE MENSAJE - 🚨 false para FIFO (consumer espera wrapper SNS)
-      rawMessageDelivery: false, // false = envuelto en metadata SNS (necesario para FIFO)
-      
-      // 🎯 FILTROS DE MENSAJES (opcional)
-      // Procesa solo mensajes que cumplan criterios específicos
-      // filterPolicy: {
-      //   eventType: sns.SubscriptionFilter.stringFilter({
-      //     allowlist: ['USER_CREATED', 'USER_UPDATED'], // Solo estos eventos
-      //     // denylist: ['USER_DELETED'], // Excluir estos eventos
-      //   }),
-      //   source: sns.SubscriptionFilter.stringFilter({
-      //     allowlist: ['web-app', 'mobile-app']
-      //   }),
-      //   priority: sns.SubscriptionFilter.numericFilter({
-      //     between: { start: 1, stop: 100 }, // Solo prioridades entre 1-100
-      //     // greaterThan: 5,
-      //     // lessThan: 100,
-      //     // betweenStrict: { start: 1, stop: 100 }
-      //   })
-      // },
-      
-      // 🎯 FILTROS POR ATRIBUTOS DE MENSAJE (alternativa a filterPolicy)
-      // filterPolicyWithMessageBody: {
-      //   background: {
-      //     color: ['red', 'blue'] // Solo mensajes con background.color = red o blue
-      //   }
-      // }
+      rawMessageDelivery: false,
     });
 
-    // Suscribir la cola al topic
     testTopic.addSubscription(subscription);
 
-    // ========================================
-    // 🔑 TABLA DE IDEMPOTENCIA - DynamoDB
-    // ========================================
-    // Tabla para trackear mensajes procesados y evitar duplicados
     this.idempotencyTable = new dynamodb.Table(this, 'IdempotencyTable', {
       tableName: `${projectName}-${environmentName}-idempotency-v2`,
-      
-      // 🔑 Partition key: 'id' es el nombre que usa Lambda Powertools por defecto
       partitionKey: { 
         name: 'id', 
         type: dynamodb.AttributeType.STRING 
       },
-      
-      // ⏰ TTL automático: limpia registros después de 7 días
-      // Evita que la tabla crezca indefinidamente
       timeToLiveAttribute: 'ttl',
-      
-      // 💰 Billing: On-demand (paga por uso, perfecto para POC)
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      
-      // 🗑️ RemovalPolicy: DESTROY para dev/testing
       removalPolicy: RemovalPolicy.DESTROY,
-      
-      // 🔐 Point-in-time recovery (opcional, para producción)
-      // pointInTimeRecovery: true,
     });
 
-    // ========================================
-    // ⚡ LAMBDA CONSUMER
-    // ========================================
-    
     const consumerLambdaBaseName = 'sqs-consumer';
     
     this.consumerLambda = new lambda.Function(
@@ -171,71 +72,40 @@ export class SqsStack extends Stack {
         runtime: lambda.Runtime.NODEJS_20_X,
         code: lambda.Code.fromAsset('../lambdas/consumer/dist'),
         handler: 'index.handler',
-        timeout: Duration.minutes(2), // Debe ser < visibilityTimeout de SQS (6min)
-        
-        // 🌍 Variables de entorno para configuración
+        timeout: Duration.minutes(2),
         environment: {
           ENVIRONMENT: environmentName,
           PROJECT_NAME: projectName,
-          
-          // 🎛️ Configuraciones para simular errores (POC)
-          FORCE_ERROR: 'false', // Cambiar a 'true' para simular errores
-          ERROR_RATE: '0', // 0-100, porcentaje de errores aleatorios
-          PROCESSING_DELAY: '1000', // ms de delay artificial
-          
-          // 🔑 Configuración de idempotencia
+          FORCE_ERROR: 'false',
+          ERROR_RATE: '0',
+          PROCESSING_DELAY: '1000',
           IDEMPOTENCY_TABLE: this.idempotencyTable.tableName,
-          ENABLE_IDEMPOTENCY: 'true', // Cambiar a 'true' para activar idempotencia
-          
-          // �📊 Configuraciones de logging
+          ENABLE_IDEMPOTENCY: 'true',
           LOG_LEVEL: 'INFO'
         },
-        
-        // 🧠 Configuraciones de memoria y concurrencia
-        memorySize: 256, // MB - ajustar según necesidades
-        // reservedConcurrentExecutions: 5, // ❌ Comentado: causa problemas con account limits
+        memorySize: 256,
       },
     );
 
-    // 🔗 Conectar la cola SQS con la Lambda
     const sqsEventSource = new lambdaEventSources.SqsEventSource(this.mainQueue, {
-      // 📦 Configuración de batching - 🧪 NUEVA ESTRATEGIA
-      // Procesa hasta 5 mensajes por batch (suficiente para A2, A3, A4, A5)
-      batchSize: 5, // ✅ Permite agrupar A2-A5 después de que A1 vaya a DLQ
-      // ⚠️ maxBatchingWindow NO soportado en FIFO queues
-      
-      // 🔄 Configuración de concurrencia  
-      maxConcurrency: 2, // ✅ Solo 1 invocación a la vez para garantizar orden en test
-      
-      // 🎯 Configuración de errores - ✅ CRÍTICO PARA EL TEST
-      reportBatchItemFailures: true, // Permite partial batch failures (comportamiento a validar)
+      batchSize: 5,
+      maxConcurrency: 2,
+      reportBatchItemFailures: true,
     });
 
-    // 🔌 Añadir el event source a la lambda
     this.consumerLambda.addEventSource(sqsEventSource);
-
-    // 🔐 Dar permisos a la lambda para interactuar con SQS
     this.mainQueue.grantConsumeMessages(this.consumerLambda);
     this.deadLetterQueue.grantSendMessages(this.consumerLambda);
-
-    // � Dar permisos para acceder a la tabla de idempotencia
     this.idempotencyTable.grantReadWriteData(this.consumerLambda);
 
-    // �📊 Dar permisos para enviar métricas a CloudWatch
     this.consumerLambda.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: [
-          'cloudwatch:PutMetricData'
-        ],
+        actions: ['cloudwatch:PutMetricData'],
         resources: ['*']
       })
     );
 
-    // ========================================
-    // 📊 OUTPUTS PARA REFERENCIAS EXTERNAS
-    // ========================================
-    
     new CfnOutput(this, 'MainQueueUrl', {
       value: this.mainQueue.queueUrl,
       description: 'URL de la cola principal SQS',
@@ -277,28 +147,5 @@ export class SqsStack extends Stack {
       description: 'Tabla DynamoDB para idempotencia',
       exportName: `${projectName}-${environmentName}-IdempotencyTable`
     });
-
-    // ========================================
-    // 📈 CONFIGURACIONES ADICIONALES AVANZADAS
-    // ========================================
-    
-    // 🔔 CloudWatch Alarms (descomentar para habilitar)
-    // const alarm = new cloudwatch.Alarm(this, 'QueueDepthAlarm', {
-    //   metric: this.mainQueue.metricApproximateNumberOfVisibleMessages(),
-    //   threshold: 100,
-    //   evaluationPeriods: 2,
-    //   alarmDescription: 'Cola con demasiados mensajes pendientes'
-    // });
-
-    // 🎯 Redrive Policy personalizada (alternativa a deadLetterQueue en constructor)
-    // const cfnQueue = this.mainQueue.node.defaultChild as sqs.CfnQueue;
-    // cfnQueue.addPropertyOverride('RedrivePolicy', {
-    //   deadLetterTargetArn: this.deadLetterQueue.queueArn,
-    //   maxReceiveCount: 3
-    // });
-
-    // 📊 Configuraciones de batch y throughput (para casos especiales)
-    // cfnQueue.addPropertyOverride('ReceiveMessageWaitTimeSeconds', 20);
-    // cfnQueue.addPropertyOverride('MaxReceiveCount', 3);
   }
 }
