@@ -16,7 +16,7 @@ export const handler = async (event: APIGatewayProxyEvent, context: Context): Pr
       eventType = 'TEST_EVENT', 
       id, 
       data, 
-      forceError = false,
+      shouldFail = false,
       subject,
       messageGroupId  // 🚨 NUEVO: Para FIFO
     } = body;
@@ -27,7 +27,7 @@ export const handler = async (event: APIGatewayProxyEvent, context: Context): Pr
       id: id || `test-${Date.now()}`,
       data: data || { test: true, timestamp: new Date().toISOString() },
       source: 'testing-api',
-      forceError: forceError
+      forceError: shouldFail
     };
     
     // Preparar atributos del mensaje
@@ -37,7 +37,7 @@ export const handler = async (event: APIGatewayProxyEvent, context: Context): Pr
       testMode: { DataType: 'String', StringValue: 'true' }
     };
     
-    if (forceError) {
+    if (shouldFail) {
       attributes.forceError = { DataType: 'String', StringValue: 'true' };
     }
     
