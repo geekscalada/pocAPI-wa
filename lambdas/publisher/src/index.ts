@@ -41,18 +41,22 @@ export const handler = async (event: APIGatewayProxyEvent, context: Context): Pr
       attributes.forceError = { DataType: 'String', StringValue: 'true' };
     }
     
-    // 🚨 NUEVO: Añadir MessageGroupId para FIFO
-    if (messageGroupId) {
-      attributes.messageGroupId = { DataType: 'String', StringValue: messageGroupId };
-    }
-    
-    // Publicar a SNS
-    const command = new PublishCommand({
+    // 🚨 FIFO: MessageGroupId es un parámetro directo del PublishCommand, no un MessageAttribute
+    const publishParams: any = {
       TopicArn: process.env.TOPIC_TEST_ARN!,
       Message: JSON.stringify(payload),
       Subject: subject || `Event: ${eventType}`,
       MessageAttributes: attributes
-    });
+    };
+    
+    // Añadir MessageGroupId si se proporciona (requerido para topics FIFO)
+    if (messageGroupId) {
+      publishParams.MessageGroupId = messageGroupId;
+      console.log(`📦 FIFO - MessageGroupId: ${messageGroupId}`);
+    }
+    
+    // Publicar a SNS
+    const command = new PublishCommand(publishParams);
     
     const result = await sns.send(command);
     console.log('Message sent to SNS:', result.MessageId);
