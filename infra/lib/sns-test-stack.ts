@@ -3,21 +3,29 @@ import { Construct } from "constructs";
 import * as sns from "aws-cdk-lib/aws-sns";
 
 export class SnsTestStack extends Stack {
-  public readonly testTopic: sns.Topic;
+  public readonly testTopic: sns.Topic;        // New FIFO topic used by new consumers
+  public readonly legacyTopic: sns.Topic;      // Existing standard topic kept to preserve export
 
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
-    // Topic name without slashes - 🚨 FIFO habilitado para suscripción con SQS FIFO
-    this.testTopic = new sns.Topic(this, "TestTopic", {
-      topicName: "test.fifo",             // 🚨 FIFO requiere sufijo .fifo
-      fifo: true,                         // ✅ Habilitado para compatibilidad con SQS FIFO
-      contentBasedDeduplication: true     // ✅ Deduplicación automática
+    // 1) Mantener el tópico estándar existente (no FIFO) para no tocar el export actual
+    //    Usa el mismo nombre físico previo ("test") para evitar reemplazos.
+    this.legacyTopic = new sns.Topic(this, "LegacyTestTopic", {
+      topicName: "test",
     });
 
-    // Output sin exportName para evitar bloqueo por ImportValue en otros stacks
+    // 2) Crear un nuevo tópico FIFO para el nuevo flujo con SQS FIFO
+    this.testTopic = new sns.Topic(this, "TestTopicFifo", {
+      topicName: "test.fifo",
+      fifo: true,
+      contentBasedDeduplication: true,
+    });
+
+    // Mantener el export existente apuntando al tópico legacy (sin cambios de valor)
     new CfnOutput(this, "TestTopicArn", {
-      value: this.testTopic.topicArn,
+      value: this.legacyTopic.topicArn,
+      exportName: "TestTopicArn",
     });
   }
 }
