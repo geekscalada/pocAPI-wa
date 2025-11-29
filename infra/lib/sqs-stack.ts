@@ -8,6 +8,7 @@ import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { InfraProps } from '@infra/bin/app.js';
+import { ITopic } from 'aws-cdk-lib/aws-sns';
 
 export class SqsStack extends Stack {
   public readonly mainQueue: sqs.Queue;
@@ -15,7 +16,7 @@ export class SqsStack extends Stack {
   public readonly consumerLambda: lambda.Function;
   public readonly idempotencyTable: dynamodb.Table;
 
-  constructor(scope: Construct, id: string, props: InfraProps) {
+  constructor(scope: Construct, id: string, props: InfraProps & { testTopic?: ITopic }) {
     super(scope, id, props);
 
     const { projectName, environmentName } = props;
@@ -92,9 +93,8 @@ export class SqsStack extends Stack {
     // 🔗 SUSCRIPCIÓN SNS -> SQS
     // ========================================
     
-    // Importar el topic SNS existente usando el valor exportado del SnsTestStack
-    const testTopicArn = Fn.importValue("TestTopicArn");
-    const testTopic = sns.Topic.fromTopicArn(this, 'ImportedTestTopic', testTopicArn);
+    // Usar referencia directa si está disponible para evitar ImportValue y bloqueos de export
+    const testTopic = props.testTopic ?? sns.Topic.fromTopicArn(this, 'ImportedTestTopic', Fn.importValue("TestTopicArn"));
     
     // Crear la suscripción con configuraciones avanzadas
     const subscription = new snsSubscriptions.SqsSubscription(this.mainQueue, {
