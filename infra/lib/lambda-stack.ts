@@ -55,7 +55,7 @@ export class LambdaStack extends Stack {
     // Publisher Lambda
     const publisherLambdaBaseName = 'publisher';
 
-    const testTopic = props.testTopic ?? sns.Topic.fromTopicArn(this, 'ImportedTestTopic', Fn.importValue("TestTopicArn"));
+    const testTopic = props.testTopic ?? sns.Topic.fromTopicArn(this, 'ImportedTestTopic', Fn.importValue("TestTopicFifoArn"));
 
     this.publisherLambda = new lambda.Function(
       this,
