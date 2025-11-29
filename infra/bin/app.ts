@@ -29,7 +29,7 @@ if (!secretValues) {
 // Stacks
 const snsTestStack = new SnsTestStack(app, "SnsTestStack", secretValues);
 const sqsStack = new SqsStack(app, "SqsStack", { ...secretValues, testTopic: snsTestStack.testTopic });
-const lambdaStack = new LambdaStack(app, `LambdaStack-prueba`, secretValues);
+const lambdaStack = new LambdaStack(app, `LambdaStack-prueba`, { ...secretValues, testTopic: snsTestStack.testTopic });
 const internalBucketStack = new InternalBucketStack(
   app,
   `InternalBucketStack-prueba`,

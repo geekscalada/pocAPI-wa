@@ -15,9 +15,9 @@ export class SnsTestStack extends Stack {
       contentBasedDeduplication: true     // ✅ Deduplicación automática
     });
 
+    // Output sin exportName para evitar bloqueo por ImportValue en otros stacks
     new CfnOutput(this, "TestTopicArn", {
       value: this.testTopic.topicArn,
-      exportName: "TestTopicArn",
     });
   }
 }

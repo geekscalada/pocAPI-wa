@@ -3,13 +3,14 @@ import { Stack, Duration, Fn,  aws_iam as iam } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { BUCKET_CONFIGS } from '../const/buckets.js';
 import { InfraProps } from '@infra/bin/app.js';
+import { ITopic } from 'aws-cdk-lib/aws-sns';
 import * as sns from "aws-cdk-lib/aws-sns";
 
 export class LambdaStack extends Stack {
   public readonly lambdaS3poc: lambda.Function;
   public readonly publisherLambda: lambda.Function;
 
-  constructor(scope: Construct, id: string, props: InfraProps) {
+  constructor(scope: Construct, id: string, props: InfraProps & { testTopic?: ITopic }) {
     super(scope, id, props);
 
     const { projectName, environmentName } = props;
@@ -54,8 +55,7 @@ export class LambdaStack extends Stack {
     // Publisher Lambda
     const publisherLambdaBaseName = 'publisher';
 
-    const testTopicArn = Fn.importValue("TestTopicArn");
-    const testTopic = sns.Topic.fromTopicArn(this, 'ImportedTestTopic', testTopicArn);
+    const testTopic = props.testTopic ?? sns.Topic.fromTopicArn(this, 'ImportedTestTopic', Fn.importValue("TestTopicArn"));
 
     this.publisherLambda = new lambda.Function(
       this,
