@@ -43,6 +43,7 @@ const testingApiStack = new TestingApiStack(
   secretValues, 
   lambdaStack.publisherLambda,
   sqsStack.directProducerLambda,
+  sqsStack.apiDirectQueue.queueName,
   sqsStack.apiDirectQueue.queueArn
 );
 

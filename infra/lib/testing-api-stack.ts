@@ -16,7 +16,7 @@ export class TestingApiStack extends Stack {
   public readonly authorizerLambda: lambda.Function;
   public readonly authorizer: apigateway.TokenAuthorizer;
 
-  constructor(scope: Construct, id: string, props: InfraProps, publisherLambda: lambda.Function, directProducerLambda: lambda.Function, apiDirectQueueArn?: string) {
+  constructor(scope: Construct, id: string, props: InfraProps, publisherLambda: lambda.Function, directProducerLambda: lambda.Function, apiDirectQueueName?: string, apiDirectQueueArn?: string) {
     super(scope, id, props);
 
     const { projectName, environmentName } = props;
@@ -167,9 +167,7 @@ export class TestingApiStack extends Stack {
     });
 
     // Integración directa API Gateway -> SQS (PROTEGIDO)
-    if (apiDirectQueueArn) {
-      const queueName = apiDirectQueueArn.split(':').pop();
-      
+    if (apiDirectQueueArn && apiDirectQueueName) {
       // Request Validator para validación automática
       const requestValidator = new apigateway.RequestValidator(this, 'ApiDirectRequestValidator', {
         restApi: this.api,
@@ -200,7 +198,7 @@ export class TestingApiStack extends Stack {
 
       const apiDirectIntegration = new apigateway.AwsIntegration({
         service: 'sqs',
-        path: `${cdk.Aws.ACCOUNT_ID}/${queueName}`,
+        path: `${cdk.Aws.ACCOUNT_ID}/${apiDirectQueueName}`,
         region: cdk.Aws.REGION,
         integrationHttpMethod: 'POST',
         options: {
