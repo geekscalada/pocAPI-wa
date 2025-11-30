@@ -169,9 +169,39 @@ export class TestingApiStack extends Stack {
     // Integración directa API Gateway -> SQS (PROTEGIDO)
     if (apiDirectQueueArn) {
       const queueName = apiDirectQueueArn.split(':').pop();
+      
+      // Request Validator para validación automática
+      const requestValidator = new apigateway.RequestValidator(this, 'ApiDirectRequestValidator', {
+        restApi: this.api,
+        requestValidatorName: 'api-direct-body-validator',
+        validateRequestBody: true,
+        validateRequestParameters: false,
+      });
+
+      // Modelo JSON Schema para validar el body
+      const requestModel = new apigateway.Model(this, 'ApiDirectRequestModel', {
+        restApi: this.api,
+        contentType: 'application/json',
+        modelName: 'ApiDirectRequest',
+        schema: {
+          type: apigateway.JsonSchemaType.OBJECT,
+          required: ['id', 'data'],
+          properties: {
+            id: {
+              type: apigateway.JsonSchemaType.STRING,
+              minLength: 1,
+            },
+            data: {
+              type: apigateway.JsonSchemaType.OBJECT,
+            },
+          },
+        },
+      });
+
       const apiDirectIntegration = new apigateway.AwsIntegration({
         service: 'sqs',
         path: `${cdk.Aws.ACCOUNT_ID}/${queueName}`,
+        region: cdk.Aws.REGION,
         integrationHttpMethod: 'POST',
         options: {
           credentialsRole: new iam.Role(this, 'ApiGatewaySqsRole', {
@@ -198,12 +228,25 @@ export class TestingApiStack extends Stack {
               statusCode: '200',
               responseTemplates: {
                 'application/json': `{
-                  "success": true,
-                  "message": "Message sent to SQS via API Gateway direct integration"
-                }`,
+  "success": true,
+  "message": "Message sent to SQS via API Gateway direct integration",
+  "messageId": "$util.escapeJavaScript($input.path('$.SendMessageResponse.SendMessageResult.MessageId'))"
+}`,
+              },
+            },
+            {
+              statusCode: '500',
+              selectionPattern: '5\\d{2}',
+              responseTemplates: {
+                'application/json': `{
+  "success": false,
+  "message": "Failed to send message to SQS",
+  "error": "$util.escapeJavaScript($input.path('$.errorMessage'))"
+}`,
               },
             },
           ],
+          passthroughBehavior: apigateway.PassthroughBehavior.NEVER,
         },
       });
 
@@ -211,7 +254,20 @@ export class TestingApiStack extends Stack {
       apiDirectResource.addMethod('POST', apiDirectIntegration, {
         authorizer: this.authorizer,
         authorizationType: apigateway.AuthorizationType.CUSTOM,
-        methodResponses: [{ statusCode: '200' }],
+        requestValidator: requestValidator,
+        requestModels: {
+          'application/json': requestModel,
+        },
+        methodResponses: [
+          { 
+            statusCode: '200',
+            responseModels: {
+              'application/json': apigateway.Model.EMPTY_MODEL,
+            },
+          },
+          { statusCode: '400' },
+          { statusCode: '500' },
+        ],
       });
     }
 
