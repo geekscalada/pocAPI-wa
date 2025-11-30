@@ -168,9 +168,10 @@ export class TestingApiStack extends Stack {
 
     // Integración directa API Gateway -> SQS (PROTEGIDO)
     if (apiDirectQueueArn) {
+      const queueName = apiDirectQueueArn.split(':').pop();
       const apiDirectIntegration = new apigateway.AwsIntegration({
         service: 'sqs',
-        path: `${props.env?.account}/${apiDirectQueueArn.split(':').pop()}`,
+        path: `${cdk.Aws.ACCOUNT_ID}/${queueName}`,
         integrationHttpMethod: 'POST',
         options: {
           credentialsRole: new iam.Role(this, 'ApiGatewaySqsRole', {
