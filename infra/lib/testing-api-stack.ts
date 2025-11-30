@@ -16,7 +16,7 @@ export class TestingApiStack extends Stack {
   public readonly authorizerLambda: lambda.Function;
   public readonly authorizer: apigateway.TokenAuthorizer;
 
-  constructor(scope: Construct, id: string, props: InfraProps, publisherLambda: lambda.Function) {
+  constructor(scope: Construct, id: string, props: InfraProps, publisherLambda: lambda.Function, directProducerLambda: lambda.Function, apiDirectQueueArn?: string) {
     super(scope, id, props);
 
     const { projectName, environmentName } = props;
@@ -153,12 +153,66 @@ export class TestingApiStack extends Stack {
     // ========================================
     
     // Endpoint principal para enviar eventos (PROTEGIDO)
-    // Usa publisherLambda que ya tiene topic ARN y permisos configurados
     const sendResource = this.api.root.addResource('send');
     sendResource.addMethod('POST', new apigateway.LambdaIntegration(this.testLambda), {
       authorizer: this.authorizer,
       authorizationType: apigateway.AuthorizationType.CUSTOM
     });
+
+    // Endpoint producer directo SQS sin SNS (PROTEGIDO)
+    const directProducerResource = this.api.root.addResource('direct-no-sns');
+    directProducerResource.addMethod('POST', new apigateway.LambdaIntegration(directProducerLambda), {
+      authorizer: this.authorizer,
+      authorizationType: apigateway.AuthorizationType.CUSTOM
+    });
+
+    // Integración directa API Gateway -> SQS (PROTEGIDO)
+    if (apiDirectQueueArn) {
+      const apiDirectIntegration = new apigateway.AwsIntegration({
+        service: 'sqs',
+        path: `${props.env?.account}/${apiDirectQueueArn.split(':').pop()}`,
+        integrationHttpMethod: 'POST',
+        options: {
+          credentialsRole: new iam.Role(this, 'ApiGatewaySqsRole', {
+            assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+            inlinePolicies: {
+              SendMessagePolicy: new iam.PolicyDocument({
+                statements: [
+                  new iam.PolicyStatement({
+                    actions: ['sqs:SendMessage'],
+                    resources: [apiDirectQueueArn],
+                  }),
+                ],
+              }),
+            },
+          }),
+          requestParameters: {
+            'integration.request.header.Content-Type': "'application/x-www-form-urlencoded'",
+          },
+          requestTemplates: {
+            'application/json': `Action=SendMessage&MessageBody=$util.urlEncode($input.body)`,
+          },
+          integrationResponses: [
+            {
+              statusCode: '200',
+              responseTemplates: {
+                'application/json': `{
+                  "success": true,
+                  "message": "Message sent to SQS via API Gateway direct integration"
+                }`,
+              },
+            },
+          ],
+        },
+      });
+
+      const apiDirectResource = this.api.root.addResource('encolado-directo');
+      apiDirectResource.addMethod('POST', apiDirectIntegration, {
+        authorizer: this.authorizer,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        methodResponses: [{ statusCode: '200' }],
+      });
+    }
 
     // ========================================
     // 📊 OUTPUTS

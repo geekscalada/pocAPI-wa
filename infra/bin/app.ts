@@ -37,12 +37,20 @@ const internalBucketStack = new InternalBucketStack(
 );
 
 // Testing API Stack (usa publisherLambda que ya tiene SNS configurado)
-const testingApiStack = new TestingApiStack(app, "TestingApiStack", secretValues, lambdaStack.publisherLambda);
+const testingApiStack = new TestingApiStack(
+  app, 
+  "TestingApiStack", 
+  secretValues, 
+  lambdaStack.publisherLambda,
+  sqsStack.directProducerLambda,
+  sqsStack.apiDirectQueue.queueArn
+);
 
 // Orden del despliegue
 sqsStack.addDependency(snsTestStack);
 lambdaStack.addDependency(snsTestStack);
-testingApiStack.addDependency(lambdaStack); // Necesita publisherLambda
+testingApiStack.addDependency(lambdaStack);
+testingApiStack.addDependency(sqsStack);
 
 /**
  * Permissions S3 to lambdas

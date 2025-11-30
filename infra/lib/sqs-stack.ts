@@ -15,6 +15,13 @@ export class SqsStack extends Stack {
   public readonly deadLetterQueue: sqs.Queue;
   public readonly consumerLambda: lambda.Function;
   public readonly idempotencyTable: dynamodb.Table;
+  public readonly directQueue: sqs.Queue;
+  public readonly directProducerLambda: lambda.Function;
+  public readonly directConsumerLambda: lambda.Function;
+  public readonly fanoutQueue: sqs.Queue;
+  public readonly fanoutConsumerLambda: lambda.Function;
+  public readonly apiDirectQueue: sqs.Queue;
+  public readonly apiDirectConsumerLambda: lambda.Function;
 
   constructor(scope: Construct, id: string, props: InfraProps & { testTopic?: ITopic }) {
     super(scope, id, props);
@@ -146,6 +153,234 @@ export class SqsStack extends Stack {
       value: this.idempotencyTable.tableName,
       description: 'Tabla DynamoDB para idempotencia',
       exportName: `${projectName}-${environmentName}-IdempotencyTable`
+    });
+
+    this.directQueue = new sqs.Queue(this, 'DirectQueue', {
+      queueName: `${projectName}-${environmentName}-direct-no-sns-queue`,
+      visibilityTimeout: Duration.minutes(2),
+      retentionPeriod: Duration.days(4),
+      receiveMessageWaitTime: Duration.seconds(0),
+    });
+
+    this.directProducerLambda = new lambda.Function(
+      this,
+      `${projectName}-${environmentName}-direct-producer`,
+      {
+        functionName: `${projectName}-${environmentName}-direct-producer`,
+        runtime: lambda.Runtime.NODEJS_20_X,
+        handler: 'index.handler',
+        timeout: Duration.seconds(30),
+        code: lambda.Code.fromInline(`
+          const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
+          const sqs = new SQSClient({});
+          
+          exports.handler = async (event) => {
+            console.log('Direct Producer (no SNS) - Request:', JSON.stringify(event));
+            
+            try {
+              const body = JSON.parse(event.body || '{}');
+              const { id, data } = body;
+              
+              const payload = {
+                event: 'DIRECT_NO_SNS',
+                id: id || \`direct-\${Date.now()}\`,
+                data: data || { test: true, timestamp: new Date().toISOString() },
+                source: 'lambda-direct-producer'
+              };
+              
+              const command = new SendMessageCommand({
+                QueueUrl: process.env.QUEUE_URL,
+                MessageBody: JSON.stringify(payload)
+              });
+              
+              const result = await sqs.send(command);
+              console.log('Message sent to SQS (no SNS):', result.MessageId);
+              
+              return {
+                statusCode: 200,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*'
+                },
+                body: JSON.stringify({
+                  success: true,
+                  messageId: result.MessageId,
+                  payload: payload,
+                  message: 'Message sent directly to SQS (bypassing SNS)'
+                })
+              };
+              
+            } catch (error) {
+              console.error('Direct producer error:', error);
+              return {
+                statusCode: 500,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*'
+                },
+                body: JSON.stringify({
+                  success: false,
+                  error: error.message,
+                  message: 'Failed to send message to SQS'
+                })
+              };
+            }
+          };
+        `),
+        environment: {
+          QUEUE_URL: this.directQueue.queueUrl
+        },
+        memorySize: 256,
+      },
+    );
+
+    this.directQueue.grantSendMessages(this.directProducerLambda);
+
+    this.directConsumerLambda = new lambda.Function(
+      this,
+      `${projectName}-${environmentName}-direct-consumer`,
+      {
+        functionName: `${projectName}-${environmentName}-direct-consumer`,
+        runtime: lambda.Runtime.NODEJS_20_X,
+        code: lambda.Code.fromAsset('../lambdas/consumer/dist'),
+        handler: 'index.handler',
+        timeout: Duration.minutes(1),
+        environment: {
+          ENVIRONMENT: environmentName,
+          PROJECT_NAME: projectName,
+          QUEUE_TYPE: 'DIRECT_NO_SNS',
+          LOG_PREFIX: '🔵 [DIRECT-NO-SNS]'
+        },
+        memorySize: 256,
+      },
+    );
+
+    const directEventSource = new lambdaEventSources.SqsEventSource(this.directQueue, {
+      batchSize: 5,
+      reportBatchItemFailures: true,
+    });
+
+    this.directConsumerLambda.addEventSource(directEventSource);
+    this.directQueue.grantConsumeMessages(this.directConsumerLambda);
+
+    this.fanoutQueue = new sqs.Queue(this, 'FanoutQueue.fifo', {
+      queueName: `${projectName}-${environmentName}-fanout-queue.fifo`,
+      visibilityTimeout: Duration.minutes(2),
+      retentionPeriod: Duration.days(4),
+      fifo: true,
+      contentBasedDeduplication: true,
+      deduplicationScope: sqs.DeduplicationScope.MESSAGE_GROUP,
+      fifoThroughputLimit: sqs.FifoThroughputLimit.PER_MESSAGE_GROUP_ID,
+      receiveMessageWaitTime: Duration.seconds(10),
+    });
+
+    const fanoutSubscription = new snsSubscriptions.SqsSubscription(this.fanoutQueue, {
+      rawMessageDelivery: false,
+    });
+    testTopic.addSubscription(fanoutSubscription);
+
+    this.fanoutConsumerLambda = new lambda.Function(
+      this,
+      `${projectName}-${environmentName}-fanout-consumer`,
+      {
+        functionName: `${projectName}-${environmentName}-fanout-consumer`,
+        runtime: lambda.Runtime.NODEJS_20_X,
+        code: lambda.Code.fromAsset('../lambdas/consumer/dist'),
+        handler: 'index.handler',
+        timeout: Duration.minutes(1),
+        environment: {
+          ENVIRONMENT: environmentName,
+          PROJECT_NAME: projectName,
+          QUEUE_TYPE: 'FANOUT_FROM_SNS',
+          LOG_PREFIX: '🟢 [FANOUT-SNS]'
+        },
+        memorySize: 256,
+      },
+    );
+
+    const fanoutEventSource = new lambdaEventSources.SqsEventSource(this.fanoutQueue, {
+      batchSize: 5,
+      maxConcurrency: 2,
+      reportBatchItemFailures: true,
+    });
+
+    this.fanoutConsumerLambda.addEventSource(fanoutEventSource);
+    this.fanoutQueue.grantConsumeMessages(this.fanoutConsumerLambda);
+
+    this.apiDirectQueue = new sqs.Queue(this, 'ApiDirectQueue', {
+      queueName: `${projectName}-${environmentName}-api-direct-queue`,
+      visibilityTimeout: Duration.minutes(2),
+      retentionPeriod: Duration.days(4),
+      receiveMessageWaitTime: Duration.seconds(0),
+    });
+
+    this.apiDirectConsumerLambda = new lambda.Function(
+      this,
+      `${projectName}-${environmentName}-api-direct-consumer`,
+      {
+        functionName: `${projectName}-${environmentName}-api-direct-consumer`,
+        runtime: lambda.Runtime.NODEJS_20_X,
+        code: lambda.Code.fromAsset('../lambdas/consumer/dist'),
+        handler: 'index.handler',
+        timeout: Duration.minutes(1),
+        environment: {
+          ENVIRONMENT: environmentName,
+          PROJECT_NAME: projectName,
+          QUEUE_TYPE: 'API_DIRECT',
+          LOG_PREFIX: '🟣 [API-DIRECT]'
+        },
+        memorySize: 256,
+      },
+    );
+
+    const apiDirectEventSource = new lambdaEventSources.SqsEventSource(this.apiDirectQueue, {
+      batchSize: 5,
+      reportBatchItemFailures: true,
+    });
+
+    this.apiDirectConsumerLambda.addEventSource(apiDirectEventSource);
+    this.apiDirectQueue.grantConsumeMessages(this.apiDirectConsumerLambda);
+
+    new CfnOutput(this, 'DirectQueueUrl', {
+      value: this.directQueue.queueUrl,
+      description: 'URL de la cola directa sin SNS',
+      exportName: `${projectName}-${environmentName}-DirectQueueUrl`
+    });
+
+    new CfnOutput(this, 'DirectQueueArn', {
+      value: this.directQueue.queueArn,
+      description: 'ARN de la cola directa sin SNS',
+      exportName: `${projectName}-${environmentName}-DirectQueueArn`
+    });
+
+    new CfnOutput(this, 'FanoutQueueUrl', {
+      value: this.fanoutQueue.queueUrl,
+      description: 'URL de la cola fanout FIFO',
+      exportName: `${projectName}-${environmentName}-FanoutQueueUrl`
+    });
+
+    new CfnOutput(this, 'FanoutQueueArn', {
+      value: this.fanoutQueue.queueArn,
+      description: 'ARN de la cola fanout FIFO',
+      exportName: `${projectName}-${environmentName}-FanoutQueueArn`
+    });
+
+    new CfnOutput(this, 'ApiDirectQueueUrl', {
+      value: this.apiDirectQueue.queueUrl,
+      description: 'URL de la cola API Gateway directo',
+      exportName: `${projectName}-${environmentName}-ApiDirectQueueUrl`
+    });
+
+    new CfnOutput(this, 'ApiDirectQueueArn', {
+      value: this.apiDirectQueue.queueArn,
+      description: 'ARN de la cola API Gateway directo',
+      exportName: `${projectName}-${environmentName}-ApiDirectQueueArn`
+    });
+
+    new CfnOutput(this, 'DirectProducerLambdaArn', {
+      value: this.directProducerLambda.functionArn,
+      description: 'ARN de la Lambda Producer directa (sin SNS)',
+      exportName: `${projectName}-${environmentName}-DirectProducerArn`
     });
   }
 }
