@@ -45,9 +45,6 @@ export class SqsStack extends Stack {
         maxReceiveCount: 2,
       },
       fifo: true,
-      contentBasedDeduplication: true,
-      deduplicationScope: sqs.DeduplicationScope.MESSAGE_GROUP,
-      fifoThroughputLimit: sqs.FifoThroughputLimit.PER_MESSAGE_GROUP_ID,
     });
 
     const testTopic = props.testTopic ?? sns.Topic.fromTopicArn(this, 'ImportedTestTopic', Fn.importValue("TestTopicArn"));
