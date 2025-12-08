@@ -13,7 +13,7 @@ export class SnsTestStack extends Stack {
     this.testTopic = new sns.Topic(this, "TestTopicFifo", {
       topicName: "test.fifo",
       fifo: true,
-      contentBasedDeduplication: true,
+      contentBasedDeduplication: false,
     });    
 
     

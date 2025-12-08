@@ -268,7 +268,7 @@ export class SqsStack extends Stack {
       visibilityTimeout: Duration.minutes(2),
       retentionPeriod: Duration.days(4),
       fifo: true,
-      //contentBasedDeduplication: true,
+      contentBasedDeduplication: false,
       //deduplicationScope: sqs.DeduplicationScope.MESSAGE_GROUP,
       fifoThroughputLimit: sqs.FifoThroughputLimit.PER_MESSAGE_GROUP_ID,
       receiveMessageWaitTime: Duration.seconds(10),
