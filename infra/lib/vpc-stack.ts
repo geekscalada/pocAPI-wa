@@ -12,7 +12,6 @@ export class VpcStack extends Stack {
   constructor(scope: Construct, id: string, props: InfraProps) {
     super(scope, id, props as StackProps);
 
-    console.log('Creating VPCs...');
     const { projectName, environmentName } = props;
 
     // VPC-A: donde viven lambdas, colas, ALB, etc.
@@ -102,8 +101,31 @@ export class VpcStack extends Stack {
     attachmentVpc2.addDependency(this.transitGateway);
 
     // Routing entre VPC1 (10.0.0.0/16) y VPC2 (10.1.0.0/16) vía TGW
-    // Usamos la route table por defecto del TGW (defaultRouteTableAssociation/Propagation habilitados),
-    // añadiendo solo rutas explícitas en las tablas de ruta de las VPC.
+    const tgwRouteTable = new ec2.CfnTransitGatewayRouteTable(this, 'TransitGatewayRouteTable', {
+      transitGatewayId: this.transitGateway.ref,
+    });
+
+    const associationVpc1 = new ec2.CfnTransitGatewayRouteTableAssociation(this, 'TgwRtAssocVpc1', {
+      transitGatewayAttachmentId: attachmentVpc1.ref,
+      transitGatewayRouteTableId: tgwRouteTable.ref,
+    });
+
+    const associationVpc2 = new ec2.CfnTransitGatewayRouteTableAssociation(this, 'TgwRtAssocVpc2', {
+      transitGatewayAttachmentId: attachmentVpc2.ref,
+      transitGatewayRouteTableId: tgwRouteTable.ref,
+    });
+
+    new ec2.CfnTransitGatewayRoute(this, 'RouteToVpc1', {
+      transitGatewayRouteTableId: tgwRouteTable.ref,
+      destinationCidrBlock: '10.0.0.0/16',
+      transitGatewayAttachmentId: attachmentVpc1.ref,
+    }).addDependency(associationVpc1);
+
+    new ec2.CfnTransitGatewayRoute(this, 'RouteToVpc2', {
+      transitGatewayRouteTableId: tgwRouteTable.ref,
+      destinationCidrBlock: '10.1.0.0/16',
+      transitGatewayAttachmentId: attachmentVpc2.ref,
+    }).addDependency(associationVpc2);
 
     // Rutas en las tablas de ruta de las subnets privadas de ambas VPC
     privateSubnetsVpc1.forEach((subnet, index) => {
