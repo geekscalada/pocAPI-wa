@@ -28,19 +28,19 @@ if (!secretValues) {
 }
 
 // Stacks
-const vpcStack = new VpcStack(app, 'VpcStack', secretValues);
+// const vpcStack = new VpcStack(app, 'VpcStack', secretValues);
 const snsTestStack = new SnsTestStack(app, "SnsTestStack", secretValues);
 const sqsStack = new SqsStack(app, "SqsStack", { ...secretValues, testTopic: snsTestStack.testTopic });
 const lambdaStack = new LambdaStack(app, `LambdaStack-prueba`, { 
   ...secretValues, 
   testTopic: snsTestStack.testTopic, 
-  vpc1: vpcStack.vpc1,
-  vpc2: vpcStack.vpc2,
+  // vpc1: vpcStack.vpc1,
+  // vpc2: vpcStack.vpc2,
 });
 const internalBucketStack = new InternalBucketStack(
   app,
   `InternalBucketStack-prueba`,
-  { ...secretValues, vpc: vpcStack.vpc1 },
+  { ...secretValues, vpc: undefined },
 );
 
 // Testing API Stack (usa publisherLambda que ya tiene SNS configurado)
@@ -58,7 +58,7 @@ const testingApiStack = new TestingApiStack(
 // Orden del despliegue
 sqsStack.addDependency(snsTestStack);
 lambdaStack.addDependency(snsTestStack);
-lambdaStack.addDependency(vpcStack);
+// lambdaStack.addDependency(vpcStack);
 testingApiStack.addDependency(lambdaStack);
 testingApiStack.addDependency(sqsStack);
 

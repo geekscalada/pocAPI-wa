@@ -79,7 +79,7 @@ export class LambdaStack extends Stack {
 
     testTopic.grantPublish(this.publisherLambda);
 
-    if (vpc1) {
+    
       this.vpcLambda = new lambda.Function(this, `${projectName}-${environmentName}-lambda-vpc1`, {
         functionName: `${projectName}-${environmentName}-lambda-vpc1`,
         runtime: lambda.Runtime.NODEJS_20_X,
@@ -96,12 +96,12 @@ export class LambdaStack extends Stack {
         `),
         handler: 'index.handler',
         timeout: Duration.seconds(30),
-        vpc: vpc1,
+        vpc: undefined,
         vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       });
-    }
+    
 
-    if (vpc2) {
+   
       this.vpc2Lambda = new lambda.Function(this, `${projectName}-${environmentName}-lambda-vpc2`, {
         functionName: `${projectName}-${environmentName}-lambda-vpc2`,
         runtime: lambda.Runtime.NODEJS_20_X,
@@ -118,9 +118,9 @@ export class LambdaStack extends Stack {
         `),
         handler: 'index.handler',
         timeout: Duration.seconds(30),
-        vpc: vpc2,
+        vpc: undefined,
         vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       });
-    }
+    
   }
 }
