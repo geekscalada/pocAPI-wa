@@ -22,6 +22,9 @@ export class SqsStack extends Stack {
   public readonly fanoutConsumerLambda: lambda.Function;
   public readonly apiDirectQueue: sqs.Queue;
   public readonly apiDirectConsumerLambda: lambda.Function;
+  public readonly dedupDirectQueue: sqs.Queue;
+  public readonly dedupDirectProducerLambda: lambda.Function;
+  public readonly dedupDirectConsumerLambda: lambda.Function;
 
   constructor(scope: Construct, id: string, props: InfraProps & { testTopic?: ITopic }) {
     super(scope, id, props);
@@ -341,6 +344,118 @@ export class SqsStack extends Stack {
     this.apiDirectConsumerLambda.addEventSource(apiDirectEventSource);
     this.apiDirectQueue.grantConsumeMessages(this.apiDirectConsumerLambda);
 
+    this.dedupDirectQueue = new sqs.Queue(this, 'DedupDirectQueue.fifo', {
+      queueName: `${projectName}-${environmentName}-dedup-direct-queue.fifo`,
+      visibilityTimeout: Duration.minutes(2),
+      retentionPeriod: Duration.days(4),
+      fifo: true,
+      contentBasedDeduplication: false,
+      fifoThroughputLimit: sqs.FifoThroughputLimit.PER_MESSAGE_GROUP_ID,
+    });
+
+    this.dedupDirectProducerLambda = new lambda.Function(
+      this,
+      `${projectName}-${environmentName}-dedup-direct-producer`,
+      {
+        functionName: `${projectName}-${environmentName}-dedup-direct-producer`,
+        runtime: lambda.Runtime.NODEJS_20_X,
+        handler: 'index.handler',
+        timeout: Duration.seconds(30),
+        code: lambda.Code.fromInline(`
+          const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
+          const sqs = new SQSClient({});
+          
+          exports.handler = async (event) => {
+            console.log('Dedup Direct Producer - Request:', JSON.stringify(event));
+            
+            try {
+              const body = JSON.parse(event.body || '{}');
+              const { id, data, groupId, MessageDeduplicationId } = body;
+              
+              const payload = {
+                event: 'DEDUP_DIRECT',
+                id: id || 'dedup-test',
+                data: data || { test: true, timestamp: new Date().toISOString() },
+                source: 'lambda-dedup-direct-producer'
+              };
+              
+              const command = new SendMessageCommand({
+                QueueUrl: process.env.QUEUE_URL,
+                MessageBody: JSON.stringify(payload),
+                MessageGroupId: groupId || 'dedup-group-1',
+                MessageDeduplicationId: MessageDeduplicationId || (id || 'dedup-test'),
+              });
+              
+              const result = await sqs.send(command);
+              console.log('Message sent to SQS (DEDUP_DIRECT):', result.MessageId);
+              
+              return {
+                statusCode: 200,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*'
+                },
+                body: JSON.stringify({
+                  success: true,
+                  messageId: result.MessageId,
+                  payload: payload,
+                  message: 'Message sent to FIFO SQS with explicit dedup id'
+                })
+              };
+              
+            } catch (error) {
+              console.error('Dedup direct producer error:', error);
+              return {
+                statusCode: 500,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*'
+                },
+                body: JSON.stringify({
+                  success: false,
+                  error: error.message,
+                  message: 'Failed to send message to SQS (dedup direct)'
+                })
+              };
+            }
+          };
+        `),
+        environment: {
+          QUEUE_URL: this.dedupDirectQueue.queueUrl,
+        },
+        memorySize: 256,
+      },
+    );
+
+    this.dedupDirectQueue.grantSendMessages(this.dedupDirectProducerLambda);
+
+    this.dedupDirectConsumerLambda = new lambda.Function(
+      this,
+      `${projectName}-${environmentName}-dedup-direct-consumer`,
+      {
+        functionName: `${projectName}-${environmentName}-dedup-direct-consumer`,
+        runtime: lambda.Runtime.NODEJS_20_X,
+        code: lambda.Code.fromAsset('../lambdas/consumer/dist'),
+        handler: 'index.handler',
+        timeout: Duration.minutes(1),
+        environment: {
+          ENVIRONMENT: environmentName,
+          PROJECT_NAME: projectName,
+          QUEUE_TYPE: 'DEDUP_DIRECT',
+          LOG_PREFIX: '🧬 [DEDUP-DIRECT]'
+        },
+        memorySize: 256,
+      },
+    );
+
+    const dedupDirectEventSource = new lambdaEventSources.SqsEventSource(this.dedupDirectQueue, {
+      batchSize: 5,
+      reportBatchItemFailures: true,
+    });
+
+    this.dedupDirectConsumerLambda.addEventSource(dedupDirectEventSource);
+    this.dedupDirectQueue.grantConsumeMessages(this.dedupDirectConsumerLambda);
+
     new CfnOutput(this, 'DirectQueueUrl', {
       value: this.directQueue.queueUrl,
       description: 'URL de la cola directa sin SNS',
@@ -375,6 +490,18 @@ export class SqsStack extends Stack {
       value: this.apiDirectQueue.queueArn,
       description: 'ARN de la cola API Gateway directo',
       exportName: `${projectName}-${environmentName}-ApiDirectQueueArn`
+    });
+
+    new CfnOutput(this, 'DedupDirectQueueUrl', {
+      value: this.dedupDirectQueue.queueUrl,
+      description: 'URL de la cola FIFO de deduplicación directa',
+      exportName: `${projectName}-${environmentName}-DedupDirectQueueUrl`
+    });
+
+    new CfnOutput(this, 'DedupDirectQueueArn', {
+      value: this.dedupDirectQueue.queueArn,
+      description: 'ARN de la cola FIFO de deduplicación directa',
+      exportName: `${projectName}-${environmentName}-DedupDirectQueueArn`
     });
 
     new CfnOutput(this, 'DirectProducerLambdaArn', {

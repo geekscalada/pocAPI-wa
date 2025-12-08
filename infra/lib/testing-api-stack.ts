@@ -16,7 +16,7 @@ export class TestingApiStack extends Stack {
   public readonly authorizerLambda: lambda.Function;
   public readonly authorizer: apigateway.TokenAuthorizer;
 
-  constructor(scope: Construct, id: string, props: InfraProps, publisherLambda: lambda.Function, directProducerLambda: lambda.Function, apiDirectQueueName?: string, apiDirectQueueArn?: string) {
+  constructor(scope: Construct, id: string, props: InfraProps, publisherLambda: lambda.Function, directProducerLambda: lambda.Function, dedupDirectProducerLambda: lambda.Function, apiDirectQueueName?: string, apiDirectQueueArn?: string) {
     super(scope, id, props);
 
     const { projectName, environmentName } = props;
@@ -162,6 +162,12 @@ export class TestingApiStack extends Stack {
     // Endpoint producer directo SQS sin SNS (PROTEGIDO)
     const directProducerResource = this.api.root.addResource('direct-no-sns');
     directProducerResource.addMethod('POST', new apigateway.LambdaIntegration(directProducerLambda), {
+      authorizer: this.authorizer,
+      authorizationType: apigateway.AuthorizationType.CUSTOM
+    });
+
+    const dedupDirectResource = this.api.root.addResource('dedup-direct');
+    dedupDirectResource.addMethod('POST', new apigateway.LambdaIntegration(dedupDirectProducerLambda), {
       authorizer: this.authorizer,
       authorizationType: apigateway.AuthorizationType.CUSTOM
     });
