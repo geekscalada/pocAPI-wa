@@ -101,31 +101,40 @@ export class VpcStack extends Stack {
     attachmentVpc2.addDependency(this.transitGateway);
 
     // Routing entre VPC1 (10.0.0.0/16) y VPC2 (10.1.0.0/16) vía TGW
-    const tgwRouteTable = new ec2.CfnTransitGatewayRouteTable(this, 'TransitGatewayRouteTable', {
-      transitGatewayId: this.transitGateway.ref,
-    });
-
-    const associationVpc1 = new ec2.CfnTransitGatewayRouteTableAssociation(this, 'TgwRtAssocVpc1', {
-      transitGatewayAttachmentId: attachmentVpc1.ref,
-      transitGatewayRouteTableId: tgwRouteTable.ref,
-    });
-
-    const associationVpc2 = new ec2.CfnTransitGatewayRouteTableAssociation(this, 'TgwRtAssocVpc2', {
-      transitGatewayAttachmentId: attachmentVpc2.ref,
-      transitGatewayRouteTableId: tgwRouteTable.ref,
-    });
-
-    new ec2.CfnTransitGatewayRoute(this, 'RouteToVpc1', {
-      transitGatewayRouteTableId: tgwRouteTable.ref,
-      destinationCidrBlock: '10.0.0.0/16',
-      transitGatewayAttachmentId: attachmentVpc1.ref,
-    }).addDependency(associationVpc1);
-
-    new ec2.CfnTransitGatewayRoute(this, 'RouteToVpc2', {
-      transitGatewayRouteTableId: tgwRouteTable.ref,
-      destinationCidrBlock: '10.1.0.0/16',
-      transitGatewayAttachmentId: attachmentVpc2.ref,
-    }).addDependency(associationVpc2);
+    // NOTA: El siguiente bloque se ha dejado comentado porque al tener
+    // defaultRouteTableAssociation/defaultRouteTablePropagation habilitados
+    // el TGW ya asocia los attachments a su tabla de rutas por defecto.
+    // Intentar asociarlos de nuevo provoca errores "AlreadyExists".
+    //
+    // Si en el futuro quieres usar una route table dedicada del TGW,
+    // puedes reactivar este bloque, pero recuerda desactivar la asociación
+    // por defecto o mover los attachments explícitamente.
+    //
+    // const tgwRouteTable = new ec2.CfnTransitGatewayRouteTable(this, 'TransitGatewayRouteTable', {
+    //   transitGatewayId: this.transitGateway.ref,
+    // });
+    //
+    // const associationVpc1 = new ec2.CfnTransitGatewayRouteTableAssociation(this, 'TgwRtAssocVpc1', {
+    //   transitGatewayAttachmentId: attachmentVpc1.ref,
+    //   transitGatewayRouteTableId: tgwRouteTable.ref,
+    // });
+    //
+    // const associationVpc2 = new ec2.CfnTransitGatewayRouteTableAssociation(this, 'TgwRtAssocVpc2', {
+    //   transitGatewayAttachmentId: attachmentVpc2.ref,
+    //   transitGatewayRouteTableId: tgwRouteTable.ref,
+    // });
+    //
+    // new ec2.CfnTransitGatewayRoute(this, 'RouteToVpc1', {
+    //   transitGatewayRouteTableId: tgwRouteTable.ref,
+    //   destinationCidrBlock: '10.0.0.0/16',
+    //   transitGatewayAttachmentId: attachmentVpc1.ref,
+    // }).addDependency(associationVpc1);
+    //
+    // new ec2.CfnTransitGatewayRoute(this, 'RouteToVpc2', {
+    //   transitGatewayRouteTableId: tgwRouteTable.ref,
+    //   destinationCidrBlock: '10.1.0.0/16',
+    //   transitGatewayAttachmentId: attachmentVpc2.ref,
+    // }).addDependency(associationVpc2);
 
     // Rutas en las tablas de ruta de las subnets privadas de ambas VPC
     privateSubnetsVpc1.forEach((subnet, index) => {
