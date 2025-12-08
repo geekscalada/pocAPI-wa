@@ -162,7 +162,7 @@ export class SqsStack extends Stack {
       queueName: `${projectName}-${environmentName}-direct-no-sns-queue`,
       visibilityTimeout: Duration.minutes(2),
       retentionPeriod: Duration.days(4),
-      receiveMessageWaitTime: Duration.seconds(0),
+      receiveMessageWaitTime: Duration.seconds(20),
     });
 
     this.directProducerLambda = new lambda.Function(
@@ -274,7 +274,7 @@ export class SqsStack extends Stack {
       contentBasedDeduplication: false,
       //deduplicationScope: sqs.DeduplicationScope.MESSAGE_GROUP,
       fifoThroughputLimit: sqs.FifoThroughputLimit.PER_MESSAGE_GROUP_ID,
-      receiveMessageWaitTime: Duration.seconds(10),
+      receiveMessageWaitTime: Duration.seconds(20),
     });
 
     const fanoutSubscription = new snsSubscriptions.SqsSubscription(this.fanoutQueue, {
@@ -314,7 +314,7 @@ export class SqsStack extends Stack {
       queueName: `${projectName}-${environmentName}-api-direct-queue`,
       visibilityTimeout: Duration.minutes(2),
       retentionPeriod: Duration.days(4),
-      receiveMessageWaitTime: Duration.seconds(0),
+      receiveMessageWaitTime: Duration.seconds(20),
     });
 
     this.apiDirectConsumerLambda = new lambda.Function(
@@ -351,6 +351,8 @@ export class SqsStack extends Stack {
       fifo: true,
       contentBasedDeduplication: false,
       fifoThroughputLimit: sqs.FifoThroughputLimit.PER_MESSAGE_GROUP_ID,
+      deduplicationScope: sqs.DeduplicationScope.MESSAGE_GROUP,
+      receiveMessageWaitTime: Duration.seconds(20),
     });
 
     this.dedupDirectProducerLambda = new lambda.Function(
@@ -424,6 +426,7 @@ export class SqsStack extends Stack {
           QUEUE_URL: this.dedupDirectQueue.queueUrl,
         },
         memorySize: 256,
+        
       },
     );
 
