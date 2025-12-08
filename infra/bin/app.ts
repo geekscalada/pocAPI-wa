@@ -5,7 +5,7 @@ import { InternalBucketStack } from '../lib/internal-bucket-stack.js';
 import { LambdaStack } from '../lib/lambda-stack.js';
 import { SqsStack } from '../lib/sqs-stack.js';
 import { TestingApiStack } from '../lib/testing-api-stack.js';
-import { VpcStack } from '../lib/vpc-stack.js';
+// import { VpcStack } from '../lib/vpc-stack.js';
 import { App, StackProps } from 'aws-cdk-lib';
 
 export interface InfraProps extends StackProps {
