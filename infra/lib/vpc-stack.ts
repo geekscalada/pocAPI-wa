@@ -12,6 +12,7 @@ export class VpcStack extends Stack {
   constructor(scope: Construct, id: string, props: InfraProps) {
     super(scope, id, props as StackProps);
 
+    console.log('Creating VPCs...');
     const { projectName, environmentName } = props;
 
     // VPC-A: donde viven lambdas, colas, ALB, etc.
