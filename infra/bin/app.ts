@@ -34,13 +34,13 @@ const sqsStack = new SqsStack(app, "SqsStack", { ...secretValues, testTopic: sns
 const lambdaStack = new LambdaStack(app, `LambdaStack-prueba`, { 
   ...secretValues, 
   testTopic: snsTestStack.testTopic, 
-  // vpc1: vpcStack.vpc1,
-  // vpc2: vpcStack.vpc2,
+  vpc1: vpcStack.vpc1,
+  vpc2: vpcStack.vpc2,
 });
 const internalBucketStack = new InternalBucketStack(
   app,
   `InternalBucketStack-prueba`,
-  { ...secretValues, vpc: undefined },
+  { ...secretValues, vpc: vpcStack.vpc1 },
 );
 
 // Testing API Stack (usa publisherLambda que ya tiene SNS configurado)

@@ -96,7 +96,7 @@ export class LambdaStack extends Stack {
         `),
         handler: 'index.handler',
         timeout: Duration.seconds(30),
-        vpc: undefined,
+        vpc: vpc1,
         // vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       });
     
@@ -118,7 +118,7 @@ export class LambdaStack extends Stack {
         `),
         handler: 'index.handler',
         timeout: Duration.seconds(30),
-        vpc: undefined,
+        vpc: vpc2,
         // vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       });
     
