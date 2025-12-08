@@ -5,7 +5,8 @@ import { InternalBucketStack } from '../lib/internal-bucket-stack.js';
 import { LambdaStack } from '../lib/lambda-stack.js';
 import { SqsStack } from '../lib/sqs-stack.js';
 import { TestingApiStack } from '../lib/testing-api-stack.js';
-import { App, StackProps, Fn } from 'aws-cdk-lib';
+import { VpcStack } from '../lib/vpc-stack.js';
+import { App, StackProps } from 'aws-cdk-lib';
 
 export interface InfraProps extends StackProps {
   projectName: string;
@@ -27,9 +28,10 @@ if (!secretValues) {
 }
 
 // Stacks
+const vpcStack = new VpcStack(app, 'VpcStack', secretValues);
 const snsTestStack = new SnsTestStack(app, "SnsTestStack", secretValues);
 const sqsStack = new SqsStack(app, "SqsStack", { ...secretValues, testTopic: snsTestStack.testTopic });
-const lambdaStack = new LambdaStack(app, `LambdaStack-prueba`, { ...secretValues, testTopic: snsTestStack.testTopic });
+const lambdaStack = new LambdaStack(app, `LambdaStack-prueba`, { ...secretValues, testTopic: snsTestStack.testTopic, vpc: vpcStack.vpc1 });
 const internalBucketStack = new InternalBucketStack(
   app,
   `InternalBucketStack-prueba`,
@@ -50,6 +52,7 @@ const testingApiStack = new TestingApiStack(
 // Orden del despliegue
 sqsStack.addDependency(snsTestStack);
 lambdaStack.addDependency(snsTestStack);
+lambdaStack.addDependency(vpcStack);
 testingApiStack.addDependency(lambdaStack);
 testingApiStack.addDependency(sqsStack);
 

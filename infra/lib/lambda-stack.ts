@@ -1,4 +1,5 @@
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Stack, Duration, Fn,  aws_iam as iam } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { BUCKET_CONFIGS } from '../const/buckets.js';
@@ -9,11 +10,12 @@ import * as sns from "aws-cdk-lib/aws-sns";
 export class LambdaStack extends Stack {
   public readonly lambdaS3poc: lambda.Function;
   public readonly publisherLambda: lambda.Function;
+  public readonly vpcLambda: lambda.Function;
 
-  constructor(scope: Construct, id: string, props: InfraProps & { testTopic?: ITopic }) {
+  constructor(scope: Construct, id: string, props: InfraProps & { testTopic?: ITopic; vpc?: ec2.IVpc }) {
     super(scope, id, props);
 
-    const { projectName, environmentName } = props;
+    const { projectName, environmentName, vpc } = props;
 
     // const newLambdaBaseName = 'jep_new_lambda';
 
@@ -75,5 +77,32 @@ export class LambdaStack extends Stack {
     );
 
     testTopic.grantPublish(this.publisherLambda);
+
+    if (vpc) {
+      this.vpcLambda = new lambda.Function(this, `${projectName}-${environmentName}-lambda-vpc`, {
+        functionName: `${projectName}-${environmentName}-lambda-vpc`,
+        runtime: lambda.Runtime.NODEJS_20_X,
+        code: lambda.Code.fromInline(`
+          exports.handler = async (event) => {
+            console.log('lambda-vpc event:', JSON.stringify(event));
+            return {
+              statusCode: 200,
+              body: JSON.stringify({
+                message: 'Hello from lambda-vpc inside VPC1',
+              }),
+            };
+          };
+        `),
+        handler: 'index.handler',
+        timeout: Duration.seconds(30),
+        vpc,
+        vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      });
+    } else {
+      // Placeholder in case VPC is not provided; keeps type happy.
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      this.vpcLambda = undefined;
+    }
   }
 }

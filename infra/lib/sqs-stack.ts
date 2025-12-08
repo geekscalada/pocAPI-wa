@@ -45,6 +45,9 @@ export class SqsStack extends Stack {
         maxReceiveCount: 2,
       },
       fifo: true,
+      contentBasedDeduplication: false,
+      //deduplicationScope: sqs.DeduplicationScope.MESSAGE_GROUP,
+      fifoThroughputLimit: sqs.FifoThroughputLimit.PER_MESSAGE_GROUP_ID,
     });
 
     const testTopic = props.testTopic ?? sns.Topic.fromTopicArn(this, 'ImportedTestTopic', Fn.importValue("TestTopicArn"));
@@ -265,8 +268,8 @@ export class SqsStack extends Stack {
       visibilityTimeout: Duration.minutes(2),
       retentionPeriod: Duration.days(4),
       fifo: true,
-      contentBasedDeduplication: true,
-      deduplicationScope: sqs.DeduplicationScope.MESSAGE_GROUP,
+      //contentBasedDeduplication: true,
+      //deduplicationScope: sqs.DeduplicationScope.MESSAGE_GROUP,
       fifoThroughputLimit: sqs.FifoThroughputLimit.PER_MESSAGE_GROUP_ID,
       receiveMessageWaitTime: Duration.seconds(10),
     });
