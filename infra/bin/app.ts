@@ -6,6 +6,7 @@ import { LambdaStack } from '../lib/lambda-stack.js';
 import { SqsStack } from '../lib/sqs-stack.js';
 import { TestingApiStack } from '../lib/testing-api-stack.js';
 import { VpcStack } from '../lib/vpc-stack.js';
+import { TestConnVpcStack } from '../lib/test-conn-vpc-stack.js';
 import { App, StackProps } from 'aws-cdk-lib';
 
 export interface InfraProps extends StackProps {
@@ -42,6 +43,11 @@ const internalBucketStack = new InternalBucketStack(
   `InternalBucketStack-prueba`,
   { ...secretValues, vpc: vpcStack.vpc1 },
 );
+
+// Stack para crear instancias de prueba en cada VPC (SSM-enabled)
+const testConnVpcStack = new TestConnVpcStack(app, 'TestConnVpcStack', { ...secretValues, vpc1: vpcStack.vpc1, vpc2: vpcStack.vpc2 });
+
+testConnVpcStack.addDependency(vpcStack);
 
 // Testing API Stack (usa publisherLambda que ya tiene SNS configurado)
 const testingApiStack = new TestingApiStack(
