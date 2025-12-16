@@ -36,6 +36,19 @@ export class InternalBucketStack extends cdk.Stack {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       }).subnets;
 
+      const redisSecurityGroup = new ec2.SecurityGroup(this, 'RedisSecurityGroup', {
+        vpc,
+        allowAllOutbound: true,
+        description: `${projectName}-${environmentName}-redis-sg`,
+      });
+
+      // Acceso interno desde la propia VPC (ajusta si quieres restringirlo a SGs concretos)
+      redisSecurityGroup.addIngressRule(
+        ec2.Peer.ipv4(vpc.vpcCidrBlock),
+        ec2.Port.tcp(6379),
+        'Allow Redis from within VPC',
+      );
+
       this.redisSubnetGroup = new elasticache.CfnSubnetGroup(this, 'RedisSubnetGroup', {
         description: `${projectName}-${environmentName}-redis-subnet-group`,
         subnetIds: privateSubnets.map((subnet) => subnet.subnetId),
@@ -47,6 +60,7 @@ export class InternalBucketStack extends cdk.Stack {
         engine: 'redis',
         numCacheNodes: 1,
         cacheSubnetGroupName: this.redisSubnetGroup.cacheSubnetGroupName!,
+        vpcSecurityGroupIds: [redisSecurityGroup.securityGroupId],
       });
 
       this.redisCluster.addDependency(this.redisSubnetGroup);
@@ -54,6 +68,11 @@ export class InternalBucketStack extends cdk.Stack {
       new cdk.CfnOutput(this, 'RedisEndpoint', {
         value: this.redisCluster.attrRedisEndpointAddress,
         description: 'Endpoint del cluster Redis en VPC1',
+      });
+
+      new cdk.CfnOutput(this, 'RedisSecurityGroupId', {
+        value: redisSecurityGroup.securityGroupId,
+        description: 'Security Group del Redis en VPC1',
       });
     }
   }
