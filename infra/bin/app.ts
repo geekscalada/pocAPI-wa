@@ -71,7 +71,7 @@ const internalBucketStack = new InternalBucketStack(
 // Orden del despliegue
 sqsStack.addDependency(snsTestStack);
 lambdaStack.addDependency(snsTestStack);
-lambdaStack.addDependency(vpcStack);
+// lambdaStack.addDependency(vpcStack);
 // testingApiStack.addDependency(lambdaStack);
 // testingApiStack.addDependency(sqsStack);
 
