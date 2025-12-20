@@ -45,15 +45,15 @@ const internalBucketStack = new InternalBucketStack(
 );
 
 // Stack para crear instancias de prueba en cada VPC (SSM-enabled)
-interface TestConnVpcProps extends InfraProps {
-  vpc1: import('aws-cdk-lib/aws-ec2').IVpc;
-  vpc2: import('aws-cdk-lib/aws-ec2').IVpc;
-}
-const testConnVpcStack = new TestConnVpcStack(app, 'TestConnVpcStack', { 
-  ...secretValues, 
-  vpc1: undefined,
-  vpc2: undefined
-} as TestConnVpcProps);
+// interface TestConnVpcProps extends InfraProps {
+//   vpc1: import('aws-cdk-lib/aws-ec2').IVpc;
+//   vpc2: import('aws-cdk-lib/aws-ec2').IVpc;
+// }
+// const testConnVpcStack = new TestConnVpcStack(app, 'TestConnVpcStack', { 
+//   ...secretValues, 
+//   vpc1: undefined,
+//   vpc2: undefined
+// } as TestConnVpcProps);
 // // testConnVpcStack.addDependency(vpcStack);
 
 // Testing API Stack (usa publisherLambda que ya tiene SNS configurado)

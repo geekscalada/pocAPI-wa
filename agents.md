@@ -227,3 +227,9 @@ npx cdk destroy --all --profile your-profile --context env=dev
 ---
 
 *Este proyecto está en constante evolución, sirviendo como base para explorar nuevas funcionalidades y patrones arquitectónicos en AWS.*
+
+
+## VPCs y transitgateway
+Si en algún momento hay que realizar la implementación de VPCs y transitgateway para que el laboratorio pueda tener las pruebas de conexión dentro de una red interna, has de revisar el docuento: IRTP.md
+Esta implementación ha de ser exclusívamente para las lambdas y no pondremos ALB delante de la APIGTW. 
+
