@@ -16,7 +16,12 @@ export class LambdaStack extends Stack {
   constructor(scope: Construct, id: string, props: InfraProps & { testTopic?: ITopic; vpc1?: ec2.IVpc; vpc2?: ec2.IVpc }) {
     super(scope, id, props);
 
-    const { projectName, environmentName, vpc1, vpc2 } = props;
+
+
+    let { projectName, environmentName, vpc1, vpc2 } = props;
+
+    vpc1 = undefined; // TEMP
+    vpc2 = undefined; // TEMP
 
     // const newLambdaBaseName = 'jep_new_lambda';
 
