@@ -146,7 +146,7 @@ export class VpcStack extends Stack {
     });
 
     privateSubnetsVpc2.forEach((subnet, index) => {
-      new ec2.CfnRoute(this, `Vpc2ToVpc1Route${index}`, {d
+      new ec2.CfnRoute(this, `Vpc2ToVpc1Route${index}`, {
         routeTableId: subnet.routeTable.routeTableId,
         destinationCidrBlock: '10.0.0.0/16',
         transitGatewayId: this.transitGateway.ref,
