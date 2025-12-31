@@ -21,6 +21,23 @@ export class AuthStack extends Stack {
     const { projectName, environmentName } = props;
 
     // ========================================
+    // 🚀 AUTH API (issue JWT)
+    // ========================================
+
+    this.api = new apigateway.RestApi(this, 'AuthApiV2', {
+      restApiName: `${projectName}-${environmentName}-auth-api`,
+      description: 'API de autenticación (validación username/password contra DynamoDB)',
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key'],
+      },
+      endpointConfiguration: {
+        types: [apigateway.EndpointType.REGIONAL],
+      },
+    });
+
+    // ========================================
     // 🔐 AUTH: DynamoDB (users) + JWT secret + authorizer lambda
     // ========================================
 
@@ -74,27 +91,11 @@ export class AuthStack extends Stack {
 
     // Create authorizer construct now (not attached to any method yet)
     this.authorizer = new apigateway.TokenAuthorizer(this, 'AuthJwtAuthorizerV2', {
+      restApi: this.api,
       handler: this.authorizerLambda,
       identitySource: 'method.request.header.Authorization',
       authorizerName: `${projectName}-${environmentName}-auth2-jwt-authorizer`,
       resultsCacheTtl: Duration.minutes(5),
-    });
-
-    // ========================================
-    // 🚀 AUTH API (issue JWT)
-    // ========================================
-
-    this.api = new apigateway.RestApi(this, 'AuthApiV2', {
-      restApiName: `${projectName}-${environmentName}-auth-api`,
-      description: 'API de autenticación (validación username/password contra DynamoDB)',
-      defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key'],
-      },
-      endpointConfiguration: {
-        types: [apigateway.EndpointType.REGIONAL],
-      },
     });
 
     const authResource = this.api.root.addResource('auth');
