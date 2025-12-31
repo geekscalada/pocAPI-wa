@@ -102,6 +102,31 @@ export class AuthStack extends Stack {
     // Public: username/password
     authResource.addResource('login').addMethod('POST', new apigateway.LambdaIntegration(this.loginLambda));
 
+    // Protected: simple endpoint to force authorizer attachment to this RestApi
+    const verifyResource = authResource.addResource('verify');
+    verifyResource.addMethod(
+      'GET',
+      new apigateway.MockIntegration({
+        passthroughBehavior: apigateway.PassthroughBehavior.NEVER,
+        requestTemplates: {
+          'application/json': '{"statusCode": 200}',
+        },
+        integrationResponses: [
+          {
+            statusCode: '200',
+            responseTemplates: {
+              'application/json': '{"ok": true}',
+            },
+          },
+        ],
+      }),
+      {
+        authorizer: this.authorizer,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+        methodResponses: [{ statusCode: '200' }],
+      },
+    );
+
     new CfnOutput(this, 'AuthApiUrl', { value: this.api.url });
     new CfnOutput(this, 'AuthUsersTableName', { value: this.usersTable.tableName });
     new CfnOutput(this, 'AuthLoginLambdaName', { value: this.loginLambda.functionName });
