@@ -32,60 +32,7 @@ export class AuthStack extends Stack {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'login.handler',
       timeout: Duration.seconds(15),
-      code: lambda.Code.fromInline(`
-        const { DynamoDBClient, GetItemCommand } = require('@aws-sdk/client-dynamodb');
-        const db = new DynamoDBClient({});
-
-        exports.handler = async (event) => {
-          try {
-            const body = JSON.parse(event.body || '{}');
-            const { username, password } = body;
-            if (!username || !password) {
-              return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({ error: 'username and password required' })
-              };
-            }
-
-            const tableName = process.env.USERS_TABLE;
-            if (!tableName) {
-              return {
-                statusCode: 500,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({ error: 'USERS_TABLE not configured' })
-              };
-            }
-
-            const res = await db.send(new GetItemCommand({
-              TableName: tableName,
-              Key: { username: { S: String(username) } }
-            }));
-
-            const stored = res && res.Item && res.Item.password && res.Item.password.S ? res.Item.password.S : null;
-            if (!stored || stored !== String(password)) {
-              return {
-                statusCode: 401,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({ ok: false, error: 'invalid credentials' })
-              };
-            }
-
-            return {
-              statusCode: 200,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({ ok: true, username: String(username) })
-            };
-          } catch (err) {
-            console.error('Auth login error', err);
-            return {
-              statusCode: 500,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({ ok: false, error: 'internal_error' })
-            };
-          }
-        };
-      `),
+      code: lambda.Code.fromAsset('../lambdas/auth/dist'),
       environment: {
         USERS_TABLE: this.usersTable.tableName,
       },
