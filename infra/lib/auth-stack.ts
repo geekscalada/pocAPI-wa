@@ -91,7 +91,6 @@ export class AuthStack extends Stack {
 
     // Create authorizer construct now (not attached to any method yet)
     this.authorizer = new apigateway.TokenAuthorizer(this, 'AuthJwtAuthorizerV2', {
-      restApi: this.api,
       handler: this.authorizerLambda,
       identitySource: 'method.request.header.Authorization',
       authorizerName: `${projectName}-${environmentName}-auth2-jwt-authorizer`,
