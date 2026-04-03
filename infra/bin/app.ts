@@ -6,9 +6,11 @@
 // import { SqsStack } from '../lib/sqs-stack.js';
 import { TestingApiStack } from '../lib/testing-api-stack.js';
 import { AuthStack } from '../lib/auth-stack.js';
+import { StepFunctionsDebounceStack } from '../lib/stepfunctions-debounce-stack.js';
 //  import { VpcStack } from '../lib/vpc-stack.js';
 // import { TestConnVpcStack } from '../lib/test-conn-vpc-stack.js';
 import { App, StackProps } from 'aws-cdk-lib';
+import { DynamoDBStack } from '@infra/lib/dynamodb-stack.js';
 
 export interface InfraProps extends StackProps {
   projectName: string;
@@ -58,7 +60,17 @@ if (!secretValues) {
 // // testConnVpcStack.addDependency(vpcStack);
 
 // ✅ Standalone Auth Stack (no dependencies)
-new AuthStack(app, 'AuthStack', secretValues);
+const debounceStack = new StepFunctionsDebounceStack(app, 'StepFunctionsDebounceStack', secretValues);
+
+const authStack = new AuthStack(app, 'AuthStack', secretValues, {
+  debounceTable: debounceStack.debounceTable,
+  debounceStateMachine: debounceStack.debounceStateMachine,
+});
+
+authStack.addDependency(debounceStack);
+
+const dynamoDBStack = new DynamoDBStack(app, `DynamoDBStack-conversations`, secretValues);
+
 
 // Testing API Stack (requiere sns/sqs/lambda stacks habilitados)
 // const testingApiStack = new TestingApiStack(

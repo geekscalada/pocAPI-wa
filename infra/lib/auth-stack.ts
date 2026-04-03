@@ -5,7 +5,13 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import { InfraProps } from '@infra/bin/app.js';
+
+export interface AuthStackExtras {
+  debounceTable?: dynamodb.ITable;
+  debounceStateMachine?: sfn.IStateMachine;
+}
 
 export class AuthStack extends Stack {
   public readonly api: apigateway.RestApi;
@@ -15,7 +21,7 @@ export class AuthStack extends Stack {
   public readonly usersTable: dynamodb.Table;
   public readonly jwtSecret: secretsmanager.Secret;
 
-  constructor(scope: Construct, id: string, props: InfraProps) {
+  constructor(scope: Construct, id: string, props: InfraProps, extras: AuthStackExtras = {}) {
     super(scope, id, props);
 
     const { projectName, environmentName } = props;
@@ -132,5 +138,116 @@ export class AuthStack extends Stack {
     new CfnOutput(this, 'AuthLoginLambdaName', { value: this.loginLambda.functionName });
     new CfnOutput(this, 'AuthAuthorizerLambdaName', { value: this.authorizerLambda.functionName });
     new CfnOutput(this, 'AuthJwtSecretName', { value: this.jwtSecret.secretName });
+
+    // ========================================
+    // 🧪 STEP FUNCTIONS: Debounce demo endpoint (optional)
+    // ========================================
+
+    if (extras.debounceTable && extras.debounceStateMachine) {
+      const starterLambda = new lambda.Function(this, 'DebounceStarterLambda', {
+        functionName: `${projectName}-${environmentName}-debounce-starter`,
+        runtime: lambda.Runtime.NODEJS_20_X,
+        handler: 'index.handler',
+        timeout: Duration.seconds(10),
+        environment: {
+          DEBOUNCE_TABLE: extras.debounceTable.tableName,
+          DEBOUNCE_STATE_MACHINE_ARN: extras.debounceStateMachine.stateMachineArn,
+        },
+        code: lambda.Code.fromInline(`
+          const AWS = require('aws-sdk');
+          const crypto = require('crypto');
+          const ddb = new AWS.DynamoDB.DocumentClient();
+          const sfn = new AWS.StepFunctions();
+
+          exports.handler = async (event, context) => {
+            try {
+              const body = JSON.parse(event.body || '{}');
+              const conversationId = body.conversationId;
+              const message = body.message;
+
+              if (!conversationId || typeof conversationId !== 'string') {
+                return { statusCode: 400, headers: cors(), body: JSON.stringify({ ok: false, error: 'conversationId requerido' }) };
+              }
+              if (!message || typeof message !== 'string') {
+                return { statusCode: 400, headers: cors(), body: JSON.stringify({ ok: false, error: 'message requerido' }) };
+              }
+
+              const token = (crypto.randomUUID ? crypto.randomUUID() : context.awsRequestId);
+              const nowMs = Date.now();
+              const ttl = Math.floor(nowMs / 1000) + 3600;
+
+              await ddb.put({
+                TableName: process.env.DEBOUNCE_TABLE,
+                Item: {
+                  conversationId,
+                  lastToken: token,
+                  lastMessage: message,
+                  updatedAt: nowMs,
+                  grouped: false,
+                  ttl,
+                },
+              }).promise();
+
+              let exec;
+              try {
+                exec = await sfn.startExecution({
+                  stateMachineArn: process.env.DEBOUNCE_STATE_MACHINE_ARN,
+                  name: conversationId,
+                  input: JSON.stringify({ conversationId }),
+                }).promise();
+              } catch (e) {
+                const err = e || {};
+                const code = err.code || err.name;
+                if (code === 'ExecutionAlreadyExists') {
+                  await ddb.update({
+                    TableName: process.env.DEBOUNCE_TABLE,
+                    Key: { conversationId },
+                    UpdateExpression: 'SET lastToken = :t, lastMessage = :m, updatedAt = :u, grouped = :g, ttl = :ttl',
+                    ExpressionAttributeValues: {
+                      ':t': token,
+                      ':m': message,
+                      ':u': nowMs,
+                      ':g': true,
+                      ':ttl': ttl,
+                    },
+                  }).promise();
+
+                  return {
+                    statusCode: 202,
+                    headers: cors(),
+                    body: JSON.stringify({ ok: true, conversationId, grouped: true, note: 'execution_already_running' }),
+                  };
+                }
+                throw e;
+              }
+
+              return {
+                statusCode: 202,
+                headers: cors(),
+                body: JSON.stringify({ ok: true, conversationId, token, executionArn: exec.executionArn }),
+              };
+            } catch (err) {
+              console.error('DebounceStarter error', err);
+              return { statusCode: 500, headers: cors(), body: JSON.stringify({ ok: false, error: 'internal_error' }) };
+            }
+          };
+
+          function cors() {
+            return {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+              'Access-Control-Allow-Methods': 'OPTIONS,POST',
+            };
+          }
+        `),
+      });
+
+      extras.debounceTable.grantWriteData(starterLambda);
+      extras.debounceStateMachine.grantStartExecution(starterLambda);
+
+      const debounceResource = this.api.root.addResource('debounce');
+      debounceResource.addMethod('POST', new apigateway.LambdaIntegration(starterLambda));
+    }
   }
 }
