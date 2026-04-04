@@ -10,7 +10,7 @@ import { StepFunctionsDebounceStack } from '../lib/stepfunctions-debounce-stack.
 //  import { VpcStack } from '../lib/vpc-stack.js';
 // import { TestConnVpcStack } from '../lib/test-conn-vpc-stack.js';
 import { App, StackProps } from 'aws-cdk-lib';
-import { DynamoDBStack } from '@infra/lib/dynamodb-stack.js';
+import { DynamoDBStack } from '../lib/dynamodb-stack.js';
 
 export interface InfraProps extends StackProps {
   projectName: string;
