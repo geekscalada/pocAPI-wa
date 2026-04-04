@@ -1,13 +1,13 @@
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { CfnOutput, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { EnvironmentProps } from '../bin/app.js';
+import { InfraProps } from '@infra/bin/app.js';
 
 export class DynamoDBStack extends Stack {
   /** Exposed so other stacks (e.g. Lambda) can reference the table */
   readonly conversationsTable: dynamodb.Table;
 
-  constructor(scope: Construct, id: string, props: EnvironmentProps) {
+  constructor(scope: Construct, id: string, props: InfraProps) {
     super(scope, id, props);
 
     const { projectName, environmentName } = props;
